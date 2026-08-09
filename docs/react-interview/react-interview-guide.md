@@ -80,7 +80,7 @@ mindmap
 
 这张图的主线是：**组件产生 Element，状态更新触发 Render，Fiber 承载协调工作，Diff 决定复用与 flags，Commit 修改宿主环境，性能工程验证整个链路的成本。**
 
-![React Element、Fiber 与 DOM 的关系](https://raw.githubusercontent.com/2530622506/interView-writing-/main/docs/react-interview/assets/react-element-fiber-dom.svg)
+![React Element、Fiber 与 DOM 的关系](https://cdn.jsdelivr.net/gh/2530622506/interView-writing-@main/docs/react-interview/assets/react-element-fiber-dom.png)
 
 不要把 JSX、虚拟 DOM、Fiber 和 DOM 混成一个概念：JSX 是语法，Element 是描述，Fiber 是工作与状态节点，DOM 是浏览器宿主结果。
 

@@ -61,7 +61,7 @@ Hooks 让函数组件拥有状态、Context、ref 和 Effect 等 React 能力，
 
 React 需要在多次渲染之间把第 N 次 Hook 调用对应到同一个 Hook 状态槽。组件 Fiber 上保存着按调用顺序组织的 Hook 节点。若 Hook 位于条件、循环或提前返回之后，不同渲染的调用顺序可能变化，React 就无法知道当前 `useState` 应该对应上次哪个状态。
 
-![Hooks 调用顺序与链表](https://raw.githubusercontent.com/2530622506/interView-writing-/main/docs/react-interview/assets/hooks-linked-list.svg)
+![Hooks 调用顺序与链表](https://cdn.jsdelivr.net/gh/2530622506/interView-writing-@main/docs/react-interview/assets/hooks-linked-list.png)
 
 图示的重点是“顺序寻址”，不是要求记住具体源码字段。React 的不同版本可能调整内部实现，但顶层调用规则来自稳定的身份约束。
 

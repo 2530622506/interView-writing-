@@ -111,7 +111,7 @@ flowchart TD
 
 ### Element、Fiber 与 DOM
 
-参见 [React Element、Fiber 与 DOM 图](https://raw.githubusercontent.com/2530622506/interView-writing-/main/docs/react-interview/assets/react-element-fiber-dom.svg)。Element 可能每次渲染新建；Fiber 在身份匹配时复用；DOM 只在 Commit 有必要时变化。
+参见 [React Element、Fiber 与 DOM 图](https://cdn.jsdelivr.net/gh/2530622506/interView-writing-@main/docs/react-interview/assets/react-element-fiber-dom.png)。Element 可能每次渲染新建；Fiber 在身份匹配时复用；DOM 只在 Commit 有必要时变化。
 
 ---
 
@@ -125,7 +125,7 @@ flowchart TD
 
 屏幕已提交版本由 `current` 树表示；下一次 Render 在 `workInProgress` 树上计算。两棵树的对应节点通过 `alternate` 关联，React 可以复用节点对象并保留已提交版本作为一致快照。新树计算完成后，Commit 让根的 current 指针切换到新树；未完成或被放弃的工作不会成为用户可见版本。
 
-![Fiber 双缓冲树](https://raw.githubusercontent.com/2530622506/interView-writing-/main/docs/react-interview/assets/fiber-double-buffer.svg)
+![Fiber 双缓冲树](https://cdn.jsdelivr.net/gh/2530622506/interView-writing-@main/docs/react-interview/assets/fiber-double-buffer.png)
 
 双缓冲的重点是**已提交树与正在计算树隔离**。它不是把两份 DOM 同时放在页面上，也不是每次都完整深拷贝整棵树。
 
@@ -173,7 +173,7 @@ React 的 lanes 是什么？它与 Scheduler 优先级有什么关系？
 
 lanes 是 React reconciler 内部用位集合表示更新优先级和批次的模型。一个更新被分配 lane，lane 向根传播；根根据 pending、suspended、pinged 等 lanes 选择下一批 render lanes。Scheduler 负责安排 JavaScript 回调何时运行，lanes 决定 React 当前应该处理哪些更新，两者相关但不是同一个概念。
 
-![React lanes 优先级模型](https://raw.githubusercontent.com/2530622506/interView-writing-/main/docs/react-interview/assets/lanes-priority-model.svg)
+![React lanes 优先级模型](https://cdn.jsdelivr.net/gh/2530622506/interView-writing-@main/docs/react-interview/assets/lanes-priority-model.png)
 
 ### 为什么用位集合
 

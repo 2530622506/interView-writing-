@@ -298,7 +298,7 @@ flowchart LR
   F --> G[Real DOM]
 ```
 
-![React Element、Fiber 与 DOM 的关系](https://raw.githubusercontent.com/2530622506/interView-writing-/main/docs/react-interview/assets/react-element-fiber-dom.svg)
+![React Element、Fiber 与 DOM 的关系](https://cdn.jsdelivr.net/gh/2530622506/interView-writing-@main/docs/react-interview/assets/react-element-fiber-dom.png)
 
 Mermaid 图强调更新链路，本地图进一步区分三类对象的职责：Element 是不可变描述，Fiber 是可变工作单元，DOM 是 Commit 阶段更新的宿主节点。
 
@@ -860,7 +860,7 @@ React 怎么判断列表中的节点是否需要移动？
 
 React 使用一个变量 `lastPlacedIndex` 维护已确认稳定的旧索引边界：
 
-![React 列表移动判断](https://raw.githubusercontent.com/2530622506/interView-writing-/main/docs/react-interview/assets/diff-list-movement.svg)
+![React 列表移动判断](https://cdn.jsdelivr.net/gh/2530622506/interView-writing-@main/docs/react-interview/assets/diff-list-movement.png)
 
 图中的 `A C B E` 例子说明：`C` 先把边界推进到旧索引 `2`，随后遇到旧索引为 `1` 的 `B`，便需要给 `B` 标记 `Placement`。这是一种启发式移动判断，不保证得到全局最少 DOM 移动次数。
 
@@ -1393,7 +1393,7 @@ Fiber 的思路是：
 
 ### 14.2 Fiber 双缓冲树
 
-![Fiber 双缓冲树](https://raw.githubusercontent.com/2530622506/interView-writing-/main/docs/react-interview/assets/fiber-double-buffer.svg)
+![Fiber 双缓冲树](https://cdn.jsdelivr.net/gh/2530622506/interView-writing-@main/docs/react-interview/assets/fiber-double-buffer.png)
 
 `current` 保存已提交版本，`workInProgress` 用于计算下一版本；两者通过 `alternate` 对应。只有完整完成 Render 的工作才会进入 Commit，不能把双缓冲理解为页面上同时存在两份 DOM。
 

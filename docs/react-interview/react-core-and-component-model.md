@@ -186,7 +186,7 @@ React Element、组件实例、Fiber 和真实 DOM 分别是什么关系？
 
 React Element 是一次渲染产生的不可变 UI 描述；组件是产生描述的逻辑单元；Fiber 是 React 内部可变的工作节点，保存组件状态、更新优先级、树关系和副作用标记；DOM 是浏览器渲染器最终操作的宿主节点。不要把虚拟 DOM 对象直接等同于 Fiber。
 
-![React Element、Fiber 与 DOM 的关系](https://raw.githubusercontent.com/2530622506/interView-writing-/main/docs/react-interview/assets/react-element-fiber-dom.svg)
+![React Element、Fiber 与 DOM 的关系](https://cdn.jsdelivr.net/gh/2530622506/interView-writing-@main/docs/react-interview/assets/react-element-fiber-dom.png)
 
 图中从左到右分别回答“想要什么”“如何完成”“最终呈现什么”。一个组件可以多次执行并产生新的 Element，而 Fiber 节点会在满足身份条件时复用并承载跨渲染状态。
 
