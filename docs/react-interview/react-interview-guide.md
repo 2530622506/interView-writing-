@@ -35,8 +35,9 @@ mindmap
       声明式 UI
       JSX 与 Element
       Props / State
-      事件与表单
-      组合与组件设计
+      SyntheticEvent 与表单
+      HOC / Render Props / Hooks
+      类组件与生命周期
     状态与渲染
       Snapshot
       Update Queue
@@ -62,7 +63,9 @@ mindmap
       Lanes
       Transition
       Suspense
-      React 18 → 19.x
+      React 18 现代 Root
+      Streaming SSR / Hydration
+      React 19.x Actions
     Diff
       type / key
       单节点
@@ -113,6 +116,55 @@ flowchart TD
 | SSR / 全栈前端 | 状态、Fiber、性能 | Suspense、hydration、RSC、SEO |
 | Vue 转 React | 核心、状态、Hooks、Diff | snapshot vs 响应式、React Compiler vs Vue 编译优化 |
 
+### P0：15 道核心原理题阅读路线
+
+P0 不是按文件平均分配，而是按依赖顺序形成 4 条链。建议每题达到“能画链路、能写最小代码、能指出版本边界、能承接 3 次追问”。
+
+| 阶段 | 核心题 | 阅读入口 | 达标证据 |
+|---|---|---|---|
+| A. 更新与 Hook 基础 | 1. 状态更新链；2. Update Queue；3. Render / Commit；4. Hook 顺序；5. Effect | [状态与渲染](./react-state-and-rendering.md) → [Hooks 深入](./react-hooks-deep-dive.md) | 能从事件推到 Commit；能解释 snapshot、queue、cleanup / setup |
+| B. Fiber 与并发 | 6. Fiber 动机；7. 工作循环；8. lanes / Root / Scheduler；12. Transition / Deferred / Suspense | [Fiber 与现代 React](./react-fiber-concurrency-and-modern-react.md) | 能画 current / workInProgress；不把并发说成多线程 |
+| C. 身份与性能传播 | 9. Reconciliation / key；10. Context；11. memoization | [Diff](./react-diff-vue3-compare.md) → [通信](./react-component-communication-and-state-management.md) → [性能](./react-performance-and-engineering.md) | 能解释状态身份、广播和 bailout 失效链 |
+| D. 框架与服务端边界 | 13. React / Vue 3；14. SSR / Hydration / SEO；15. React Compiler | [核心对比](./react-core-and-component-model.md#9-react-与-vue-3-怎么比较) → [SSR / Compiler](./react-performance-and-engineering.md) | 能从机制推到工程影响，不做无证据性能排名 |
+
+```mermaid
+flowchart LR
+  A[状态 snapshot / queue] --> B[Hook / Effect]
+  B --> C[Fiber 工作循环]
+  C --> D[lanes / 并发 / Suspense]
+  D --> E[key / Context / memoization]
+  E --> F[React vs Vue 3]
+  F --> G[SSR / Hydration / Compiler]
+```
+
+> 复习策略：第一轮只讲 30 秒结论；第二轮补 3 分钟机制；第三轮不看文档手画时序图；第四轮做工程反例和版本纠错。
+
+### P1 传统高频题直达
+
+这些题经常被误答成 API 清单。复习时至少准备“30 秒结论 → 机制 → 代码 → 边界 → 追问”五层回答。
+
+| 高频题 | 完整章节 | 至少讲清 |
+|---|---|---|
+| 虚拟 DOM 是什么，是否一定更快 | [Element、Fiber、虚拟 DOM 与真实 DOM](./react-core-and-component-model.md#3-react-element组件fiber虚拟-dom-与真实-dom) | 描述层、协调、flags、Commit、性能边界 |
+| Props / State / 单向数据流 | [Props、State 与单向数据流](./react-core-and-component-model.md#4-propsstate-与单向数据流) | 所有权、snapshot、不可变更新、最小 state |
+| HOC、Render Props、自定义 Hook | [组件设计、组合与逻辑复用](./react-core-and-component-model.md#5-组件设计组合与逻辑复用) | 复用对象、wrapper hell、ref、类型与版本迁移 |
+| SyntheticEvent 与事件委托 | [React 事件系统](./react-core-and-component-model.md#6-syntheticevent-与-react-事件系统) | Root 委托、传播、Portal、原生监听清理、事件池历史 |
+| 受控与非受控组件 | [受控与非受控组件](./react-core-and-component-model.md#7-受控与非受控组件) | 状态所有权、defaultValue、切换警告、文件输入、性能 |
+| 父子、兄弟、跨层与跨窗口通信 | [组件通信](./react-component-communication-and-state-management.md#2-父子组件通信数据意图结构与命令) | props / callback / children / ref / Context / Store / URL |
+| 函数组件、类组件与生命周期 | [类组件与生命周期](./react-core-and-component-model.md#8-函数组件类组件与生命周期) | 闭包快照、实例语义、snapshot、Error Boundary、Strict Mode |
+| React 18 有哪些关键变化 | [React 18 的关键变化](./react-fiber-concurrency-and-modern-react.md#9-react-18-的关键变化) | Root API、batching、Transition、SSR、external store、版本边界 |
+
+### 难度标签与回答深度
+
+| 标签 | 面试要求 | 推荐回答结构 | 常见失分点 |
+|---|---|---|---|
+| `基础必会` | 结论准确，代码能运行 | 30 秒结论 + 1 个例子 + 1 个边界 | 只背定义，不会解释所有权和时序 |
+| `进阶重点` | 能串联机制与工程影响 | 30 秒 + 3 分钟 + 反例 + 诊断方法 | 把 API 行为说成绝对同步 / 异步 |
+| `高级深挖` | 能推演内部链路并承认实现边界 | 图示 / 伪代码 + 版本边界 + 源码字段职责 | 死背字段，不能落到用户体验与验证 |
+| `历史兼容` | 能维护旧代码并给迁移方向 | 旧行为 + 现代边界 + 渐进迁移 | 把事件池、旧生命周期当现代主线 |
+
+同一道题可以跨难度。例如“为什么三次 `setCount(count + 1)` 只加 1”是基础题；继续追问 queue、lane、baseQueue 和重放就进入高级深挖。
+
 ---
 
 ## 3. 版本与稳定性边界
@@ -133,7 +185,7 @@ flowchart TD
 
 ---
 
-## 4. 20 道核心题的 30 秒回答
+## 4. 27 道核心题的 30 秒回答
 
 ### 4.1 React 是什么？`基础必会`
 
@@ -223,7 +275,7 @@ Fiber 是 React 的协调架构和工作节点。它显式保存树关系、状�
 
 lanes 用位集合表示更新优先级和批次，帮助根选择下一批工作并保留本轮跳过的更新。Scheduler 决定回调何时运行，lanes 决定 React 处理哪些更新，二者协作但不是同一个概念。
 
-→ [深入：lanes](./react-fiber-concurrency-and-modern-react.md#4-lanes-与优先级)
+→ [深入：lanes](./react-fiber-concurrency-and-modern-react.md#4-lanesroot-与-scheduler)
 
 ### 4.16 并发渲染是不是多线程？`高级深挖`
 
@@ -255,11 +307,66 @@ index 代表位置，不代表业务身份。列表头部插入、排序或删�
 
 → [深入：性能工程](./react-performance-and-engineering.md)
 
+
+### 4.21 虚拟 DOM 一定比直接操作 DOM 快吗？`基础必会`
+
+不一定。虚拟 DOM 的核心价值是用声明式对象描述 UI，并让 React 在跨更新、跨平台和组件边界下统一协调变化。它增加了创建 Element 和比较树的成本；在已知单点修改中，精确手写 DOM 可能更快。React 的优势是提供可维护的更新模型，并通过 Fiber、Diff 和 flags 把必要宿主变更集中到 Commit。
+
+→ [深入：Element、Fiber、虚拟 DOM 与真实 DOM](./react-core-and-component-model.md#3-react-element组件fiber虚拟-dom-与真实-dom)
+
+### 4.22 HOC、Render Props 和自定义 Hook 如何选择？`基础必会`
+
+复用无 UI 的有状态逻辑通常优先自定义 Hook；复用结构和控制反转可用组合或 Render Props；需要包装遗留类组件、注入横切能力时仍可使用 HOC。要能补充 HOC 的 props 冲突、静态属性、ref 转发、wrapper hell 和 TypeScript 推导成本，而不是说“Hooks 已经完全淘汰 HOC”。
+
+→ [深入：组件设计、组合与逻辑复用](./react-core-and-component-model.md#5-组件设计组合与逻辑复用)
+
+### 4.23 React 合成事件是什么？`基础必会`
+
+`SyntheticEvent` 提供接近 DOM Event 的跨浏览器接口，React DOM 通常在 Root 附近委托事件，再按 React 树执行捕获与冒泡。`target` 是事件起点，`currentTarget` 是当前处理节点；`preventDefault` 阻止默认行为，`stopPropagation` 阻止传播。现代 React Web 不应再把事件池化和必须调用 `persist()` 当默认结论。
+
+→ [深入：SyntheticEvent 与事件系统](./react-core-and-component-model.md#6-syntheticevent-与-react-事件系统)
+
+### 4.24 受控组件和非受控组件怎么选？`基础必会`
+
+受控组件的当前值由 React state / props 拥有，通过 `value` / `checked` 与回调形成闭环；非受控组件由 DOM 或组件内部保存当前值，调用方用 `defaultValue`、ref 或提交事件读取。需要即时校验、联动和单一真相来源时选受控；大型表单可采用字段级订阅或非受控注册降低更新范围。不要在生命周期中随意切换受控与非受控。
+
+→ [深入：受控与非受控组件](./react-core-and-component-model.md#7-受控与非受控组件)
+
+### 4.25 函数组件和类组件的本质差异？`进阶重点`
+
+函数组件每次 Render 形成一组新的 props、state 与闭包快照；类组件方法通常通过稳定实例读取 `this.props` / `this.state` 的当前值。Hooks 按调用顺序关联状态，类组件通过实例和生命周期组织逻辑。现代业务代码通常优先函数组件，但 Error Boundary 和遗留项目仍要求理解类组件。
+
+→ [深入：函数组件、类组件与生命周期](./react-core-and-component-model.md#8-函数组件类组件与生命周期)
+
+### 4.26 Effect 能否一一对应类生命周期？`进阶重点`
+
+不能机械对应。生命周期按“组件何时 mount / update / unmount”组织，Effect 按“某个外部系统如何与当前 props / state 同步”组织。一个订阅 Effect 通常同时覆盖建立订阅、依赖变化时清理旧订阅并建立新订阅，以及卸载清理；能在 Render 推导的值不应为了模仿生命周期放进 Effect。
+
+→ [深入：生命周期与 Effect 边界](./react-core-and-component-model.md#8-函数组件类组件与生命周期)
+
+### 4.27 React 18 的主线变化是什么？`进阶重点`
+
+React 18 通过 `createRoot` / `hydrateRoot` 引入现代 Root 语境，并稳定自动批处理、Transition、`useDeferredValue`、`useId`、`useSyncExternalStore`、流式 SSR 和选择性 hydration 等能力。主线是优先级、响应性、外部数据一致性和渐进可交互；并发不等于多线程，`createRoot` 也不等于所有更新自动并发。
+
+→ [深入：React 18 的关键变化](./react-fiber-concurrency-and-modern-react.md#9-react-18-的关键变化)
+
 ---
 
 ## 5. 深度追问链
 
 面试官往往不会停在第一问。下面按“问题 → 追问”组织复习。
+
+### 追问链索引
+
+| 起手题 | 深挖终点 | 主要专题 |
+|---|---|---|
+| `setState` 是同步还是异步 | queue、lane、可重试 Render、原子 Commit | [状态与渲染](./react-state-and-rendering.md) |
+| Hooks 为什么不能写在条件里 | dispatcher、Hook 槽位、闭包、Effect 依赖 | [Hooks 深入](./react-hooks-deep-dive.md) |
+| Fiber 是什么 | 双缓冲、工作循环、Root 调度、并发安全 | [Fiber 与现代 React](./react-fiber-concurrency-and-modern-react.md) |
+| key 有什么用 | 状态身份、Placement、`lastPlacedIndex`、Vue 3 LIS | [Diff 对比](./react-diff-vue3-compare.md) |
+| Context 能否替代 Redux | 传播、`memo` 穿透、selector、tearing | [通信与状态管理](./react-component-communication-and-state-management.md) |
+| 如何做性能优化 | 工具证据、瓶颈分层、工程闭环、Compiler | [性能与工程化](./react-performance-and-engineering.md#12-工程场景闭环症状定位根因修复与验证) |
+| SSR 是否一定更快 / SEO 更好 | mismatch、Streaming、hydration CPU、RSC | [服务端工程边界](./react-performance-and-engineering.md#10-hydration-与服务端工程边界) |
 
 ### 状态更新链
 
@@ -444,11 +551,11 @@ setState 是否异步？
 
 | 专题 | 解决的核心问题 | 重点图示 |
 |---|---|---|
-| [核心与组件模型](./react-core-and-component-model.md) | React、JSX、组件、事件、表单 | 声明式更新链、Element / Fiber / DOM |
+| [核心与组件模型](./react-core-and-component-model.md) | React、JSX、虚拟 DOM、HOC、事件、受控组件、类生命周期 | 声明式更新链、Element / Fiber / DOM、生命周期 |
 | [状态与渲染](./react-state-and-rendering.md) | snapshot、queue、batching、Commit | 状态时序、完整更新链路 |
 | [Hooks 深入](./react-hooks-deep-dive.md) | Hook 顺序、闭包、Effect、现代 Hooks | Hook 链表、Effect 生命周期 |
-| [组件通信与状态管理](./react-component-communication-and-state-management.md) | 所有权、Context、Store、服务端状态 | 选型决策树、外部 Store 时序 |
-| [Fiber 与现代 React](./react-fiber-concurrency-and-modern-react.md) | Fiber、lanes、并发、Suspense、19.x | 双缓冲、lane 优先级 |
+| [组件通信与状态管理](./react-component-communication-and-state-management.md) | props、callback、children、ref、Context、Store、跨窗口 | 选型决策树、外部 Store 时序 |
+| [Fiber 与现代 React](./react-fiber-concurrency-and-modern-react.md) | Fiber、lanes、并发、Suspense、React 18 / 19.x | 双缓冲、lane 优先级、流式 SSR |
 | [Diff 与 Vue 3 对比](./react-diff-vue3-compare.md) | key、列表协调、移动、LIS | Diff 流程、列表移动 |
 | [性能与工程化](./react-performance-and-engineering.md) | Profiler、Compiler、SSR、SEO | 性能诊断、渲染模式 |
 

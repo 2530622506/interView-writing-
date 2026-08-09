@@ -20,7 +20,7 @@
 10. [React 如何判断节点移动](#10-react-如何判断节点移动)
 11. [React 列表 Diff 完整示例](#11-react-列表-diff-完整示例)
 12. [没有 key 或使用 index 作为 key 的问题](#12-没有-key-或使用-index-作为-key-的问题)
-13. [React Diff 与组件状态保留](#13-react-diff-与组件状态保留)
+13. [React Diff、`key` 与组件状态身份](#13-react-diffkey-与组件状态身份)
 14. [React Diff 与 Fiber 架构](#14-react-diff-与-fiber-架构)
 15. [React Diff 与 Commit 阶段](#15-react-diff-与-commit-阶段)
 16. [React 和 Vue 3 Diff 核心对比](#16-react-和-vue-3-diff-核心对比)
@@ -1248,106 +1248,207 @@ id=3 始终是同一个 todo
 
 ---
 
-## 13. React Diff 与组件状态保留
+## 13. React Diff、`key` 与组件状态身份
 
-### 问题
+### 面试问题
 
-React 如何决定组件状态是保留还是重置？
+React 如何决定组件状态是保留还是重置？`key` 为什么不仅影响列表性能，还会影响输入框、焦点和 Effect？
 
-### 回答
+### 30 秒回答
 
-React 会根据组件在 UI 树中的位置、组件类型和 key 来决定是否保留状态。
+React 把 state 保存在 Fiber 上，而不是 JSX 标签或业务对象本身。新旧 Element 在同一父级下能够按位置 / key 和 type 匹配到同一 Fiber 时，状态通常会被保留；type 不同、key 不同或节点从树中移除时，旧 Fiber 会卸载，新 Fiber 重新挂载，state、ref 和 Effect 生命周期都会重置。`key` 的核心是声明兄弟节点的稳定身份，不只是消除警告或提高 Diff 速度。
 
-### 13.1 同位置、同类型、同 key：保留状态
+### 3 分钟展开
+
+可以把状态身份理解成“父级作用域内的匹配协议”：
+
+1. 父 Fiber 协调自己的 children；
+2. 单节点主要比较 key 与 type，列表先尝试顺序匹配，再对剩余节点建立映射；
+3. 匹配成功时，React 复用对应 current Fiber，并创建 / 复用 work-in-progress；
+4. Fiber 上的 `memoizedState`、Hook 链表、Update Queue 和 `stateNode` 因身份延续而被保留；
+5. 匹配失败时，旧 Fiber 标记删除，新 Element 创建新 Fiber；
+6. Commit 时旧节点 cleanup / unmount，新节点 mount，DOM 状态、ref 和 Effect 也按新身份建立。
+
+所以“组件函数看起来还是同一个名字”不够。React 关心的是它在当前父级 children 中是否还能匹配到同一个身份。
+
+### 状态到底存在哪里
+
+> 下列结构是面试级简化示意，并非 React 源码原文。
+
+```js
+const fiber = {
+  key: 'user-42',
+  type: UserForm,
+  memoizedState: firstHook, // useState / useReducer 等 Hook 链表入口
+  updateQueue: effectQueue,
+  stateNode: null,
+  alternate: previousFiber,
+};
+
+function canReuse(oldFiber, newElement) {
+  return oldFiber.key === newElement.key
+    && oldFiber.type === newElement.type;
+}
+```
+
+真实协调还区分 Fragment、Portal、文本、lazy、热更新和多种 Fiber tag，但面试主线是：**type 决定组件语义，key 在兄弟范围内补充身份，Fiber 承载被保留的状态。**
+
+### 身份判断流程
+
+```mermaid
+flowchart TD
+  A[父 Fiber 开始协调 children] --> B{旧 Fiber 与新 Element 的 key 匹配吗}
+  B -->|否| N[旧节点删除候选，新建 Fiber]
+  B -->|是| C{type 兼容吗}
+  C -->|否| N
+  C -->|是| R[复用 Fiber 身份]
+  R --> S[保留 state、ref 和可复用宿主节点]
+  N --> U[Commit：旧 cleanup / unmount]
+  U --> M[新节点 mount，状态重新初始化]
+```
+
+列表场景会多一层顺序扫描和剩余 Map，但最终仍要回答同一个问题：新 Element 是否能与某个旧 Fiber 建立稳定身份对应。
+
+### 场景一：同位置、同类型，状态保留
 
 ```tsx
-// 中文注释：该示例聚焦当前机制，省略无关工程细节。
-function App({ mode }) {
+function App({ mode }: { mode: 'edit' | 'preview' }) {
   return (
-    <div>
+    <section>
       {mode === 'edit' ? <Counter /> : <Counter />}
-    </div>
-  )
+    </section>
+  );
 }
 ```
 
-虽然条件不同，但渲染结果在同一个位置都是 `<Counter />`，React 会认为它是同一个组件，状态会保留。
+两个分支源码位置不同不重要；它们在父级结果树的同一位置都是同类型、同 key 的 `Counter`，因此通常复用同一 Fiber，计数状态保留。
 
-```text
-old: position 0 -> Counter
-new: position 0 -> Counter
-结果：保留 state
-```
-
----
-
-### 13.2 同位置、不同类型：重置状态
+### 场景二：同位置、不同类型，整棵子树重置
 
 ```tsx
-// 中文注释：该示例聚焦当前机制，省略无关工程细节。
-function App({ mode }) {
+function App({ mode }: { mode: 'edit' | 'preview' }) {
   return (
-    <div>
+    <section>
       {mode === 'edit' ? <EditForm /> : <Preview />}
-    </div>
-  )
+    </section>
+  );
 }
 ```
 
-`EditForm` 和 `Preview` 类型不同：
+`EditForm` 与 `Preview` 的 type 不同。React 不会因为两者最终都返回 `<div>` 就复用组件状态；旧组件卸载，新组件挂载，其子树状态也随之重置。
+
+### 场景三：用业务 `key` 主动重置表单
+
+```tsx
+function ProfileEditor({ userId }: { userId: string }) {
+  return (
+    <Suspense fallback={<ProfileSkeleton />}>
+      <UserForm key={userId} userId={userId} />
+    </Suspense>
+  );
+}
+```
+
+当 `userId` 从 `1` 变成 `2`，虽然 type 都是 `UserForm`，但 key 改变表示“这是另一位用户的表单身份”。旧草稿、ref 和 Effect 被清理，新表单重新初始化，避免 A 用户草稿泄漏到 B 用户。
+
+这类主动重置适合：
+
+- 切换用户 / 租户 / 会话；
+- 重新开始一局游戏；
+- 让动画或第三方控件重新挂载；
+- 重置无法方便提升或显式清空的局部状态。
+
+不要使用随机 key 强制“修复一切”。随机 key 会让每次父组件 Render 都卸载重挂，导致焦点丢失、请求重发、动画重启和性能浪费。
+
+### 场景四：index key 导致输入状态错位
+
+```tsx
+function TodoList({ todos }: { todos: Todo[] }) {
+  return todos.map((todo, index) => (
+    <TodoEditor key={index} todo={todo} /> // ❌ index 表示位置，不是 todo 身份
+  ));
+}
+```
+
+用户在第 2 行输入草稿后，如果列表头部插入一条数据：
 
 ```text
-old: position 0 -> EditForm
-new: position 0 -> Preview
+旧：key 0 -> A，key 1 -> B，key 2 -> C
+新：key 0 -> D，key 1 -> A，key 2 -> B，key 3 -> C
 ```
 
-React 会卸载旧组件，挂载新组件，旧状态丢失。
+React 会按 key 复用原 Fiber，于是原来属于 B 的局部草稿可能出现在 A 行。DOM input 的选择区、焦点、动画和订阅也可能跟着错误身份移动。
 
----
-
-### 13.3 同类型但 key 不同：重置状态
+推荐使用稳定业务 ID：
 
 ```tsx
-// 中文注释：该示例聚焦当前机制，省略无关工程细节。
-function Profile({ userId }) {
-  return <UserForm key={userId} userId={userId} />
+function TodoList({ todos }: { todos: Todo[] }) {
+  return todos.map((todo) => (
+    <TodoEditor key={todo.id} todo={todo} /> // ✅ key 与业务实体身份一致
+  ));
 }
 ```
 
-当 `userId` 从 `1` 变成 `2` 时：
+### `key` 的 5 个边界
+
+1. **只在同一父级的兄弟节点间有意义**：不要求全局唯一；
+2. **不会传入 props**：需要业务 ID 时显式传 `id={todo.id}`；
+3. **稳定比“唯一一次”更重要**：`Math.random()` 虽几乎唯一，却不稳定；
+4. **index 不是绝对禁止**：真正静态、无重排、无局部状态的展示列表可以使用；
+5. **key 变化是身份重置，不只是 DOM 移动提示**：会影响 state、ref、Effect 和宿主节点复用。
+
+### 列表移动与状态保留不要混为一谈
+
+稳定 key 先帮助 React 找到“它还是谁”，之后 React 才根据旧索引、`lastPlacedIndex` 等判断“它是否需要移动”。
 
 ```text
-old: UserForm key=1
-new: UserForm key=2
+身份匹配：key + type → 是否复用旧 Fiber
+位置判断：oldIndex 与已确认边界 → 是否标记 Placement
+提交结果：根据 flags 移动、插入或删除 DOM
 ```
 
-虽然组件类型都是 `UserForm`，但 key 不同，React 会认为它们不是同一个组件，于是重置状态。
+因此 key 不保证最少 DOM 移动，也不会让列表 Diff 变成 O(1)；它提供的是更可靠的身份信息。
 
-这常用于主动清空表单状态：
+### 与状态更新、Fiber 专题的交叉关系
 
-```tsx
-// 中文注释：该示例聚焦当前机制，省略无关工程细节。
-<UserForm key={selectedUserId} userId={selectedUserId} />
-```
+- 状态为什么跟随 Fiber，而不是变量名：见[状态如何保留与重置](./react-state-and-rendering.md#6-状态如何保留与重置)；
+- current / work-in-progress 如何复用身份：见[Fiber 双缓冲与工作循环](./react-fiber-concurrency-and-modern-react.md#3-双缓冲与工作循环)；
+- 列表如何寻找可复用节点、判断移动：继续阅读本专题第 8～11 节，不在这里重复算法演算。
 
-当切换用户时，表单内部 state 会重新初始化。
+### 如何验证状态身份问题
 
----
+1. 给列表项显示业务 ID 与内部草稿，执行头插、删除和排序；
+2. 使用 React DevTools 观察组件是 update 还是 remount；
+3. 在 Effect 中记录 setup / cleanup，确认 key 变化是否触发卸载重挂；
+4. 检查焦点、光标、动画和非受控 input 是否跟随正确业务实体；
+5. 如果只能靠随机 key 修复，优先排查派生状态、Effect 同步和错误所有权。
 
-### 13.4 key 不只是列表中能用
+### 边界与反例
 
-`key` 不只用于 `map` 列表，也可以用于任何需要控制状态保留或重置的组件位置。
+- 同 type / key 不代表一定没有 Render，只表示状态身份有复用机会；props、state、Context 变化仍可触发更新。
+- DOM 节点是否复用与组件 Fiber 身份相关，但不同宿主类型仍会导致对应 DOM 替换。
+- CSS 隐藏不会卸载 Fiber；条件渲染移除节点会卸载，二者对状态保留不同。
+- 把组件函数定义在另一个组件内部，会让每次 Render 产生新的函数 type，可能导致状态不断重置。
+- Strict Mode 开发检查可能额外执行流程，不能用开发日志次数代替身份判断。
 
-例如：
+### 面试官追问树
 
-```tsx
-// 中文注释：该示例聚焦当前机制，省略无关工程细节。
-function Chat({ contact }) {
-  return <ChatInput key={contact.id} contact={contact} />
-}
-```
+1. state 存在 JSX、DOM 还是 Fiber 上？
+2. React 如何判断两个组件“还是同一个”？
+3. key 为什么只需要在兄弟节点中唯一？
+4. 使用 index key 为什么会导致输入状态错位？
+5. key 改变时，Effect 和 ref 会发生什么？
+6. 随机 key 为什么可能让性能和交互更差？
+7. 稳定 key 是否保证 DOM 移动次数最少？
+8. 为什么在组件内部定义组件可能丢 state？
 
-当切换联系人时，输入框草稿会被清空，避免把 A 的草稿误发给 B。
+### 版本边界
+
+状态按树位置、type 和 key 保留的原则是现代 React 的稳定心智模型。具体 Reconciliation 分支、Fiber 字段和列表启发式属于内部实现，可能随版本调整；业务代码应依赖稳定 key 和清晰状态所有权，而不是依赖某段源码的偶然遍历细节。
+
+### 一句话收束
+
+> `key` 不是列表装饰符，而是父级 children 中的“身份证”；React 先用身份决定是否保留 Fiber 状态，再决定 DOM 应该更新、移动还是重建。
 
 ---
 
