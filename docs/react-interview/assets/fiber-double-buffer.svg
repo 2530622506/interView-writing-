@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="560" viewBox="0 0 1120 560" role="img" aria-labelledby="title desc">
+  <title id="title">Fiber 双缓冲树</title><desc id="desc">current 树与 workInProgress 树通过 alternate 连接，提交后交换身份。</desc>
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3z" fill="#475569"/></marker><style>.n{rx:12;stroke-width:2}.h{font:700 22px system-ui;fill:#0f172a}.t{font:16px system-ui;fill:#334155}.e{stroke:#64748b;stroke-width:2}.alt{stroke:#ef4444;stroke-width:2;stroke-dasharray:8 6;marker-end:url(#a)}.commit{stroke:#16a34a;stroke-width:4;marker-end:url(#a)}</style></defs>
+  <rect width="1120" height="560" fill="#f8fafc"/><text class="h" x="280" y="48" text-anchor="middle">current：屏幕当前版本</text><text class="h" x="840" y="48" text-anchor="middle">workInProgress：下一版本</text>
+  <g fill="#dbeafe" stroke="#3b82f6"><rect class="n" x="210" y="80" width="140" height="58"/><rect class="n" x="100" y="220" width="140" height="58"/><rect class="n" x="320" y="220" width="140" height="58"/><rect class="n" x="320" y="370" width="140" height="58"/></g>
+  <g fill="#ede9fe" stroke="#8b5cf6"><rect class="n" x="770" y="80" width="140" height="58"/><rect class="n" x="660" y="220" width="140" height="58"/><rect class="n" x="880" y="220" width="140" height="58"/><rect class="n" x="880" y="370" width="140" height="58"/></g>
+  <g class="t" text-anchor="middle"><text x="280" y="116">Root</text><text x="170" y="256">List</text><text x="390" y="256">Panel</text><text x="390" y="406">Button</text><text x="840" y="116">Root'</text><text x="730" y="256">List'</text><text x="950" y="256">Panel'</text><text x="950" y="406">Button'</text></g>
+  <g class="e"><line x1="280" y1="138" x2="170" y2="220"/><line x1="280" y1="138" x2="390" y2="220"/><line x1="390" y1="278" x2="390" y2="370"/><line x1="840" y1="138" x2="730" y2="220"/><line x1="840" y1="138" x2="950" y2="220"/><line x1="950" y1="278" x2="950" y2="370"/></g>
+  <g class="alt"><line x1="350" y1="109" x2="765" y2="109"/><line x1="240" y1="249" x2="655" y2="249"/><line x1="460" y1="249" x2="875" y2="249"/><line x1="460" y1="399" x2="875" y2="399"/></g>
+  <text class="t" x="560" y="92" text-anchor="middle" fill="#b91c1c">alternate</text>
+  <line class="commit" x1="840" y1="465" x2="840" y2="520"/><text class="t" x="930" y="505">Commit 后成为新的 current</text>
+</svg>

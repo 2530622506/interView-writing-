@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="470" viewBox="0 0 1100 470" role="img" aria-labelledby="title desc">
+  <title id="title">React lanes 优先级模型</title><desc id="desc">更新被标记到不同 lane，调度器优先处理更紧急的工作，低优先级工作可被打断并重试。</desc>
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3z" fill="#334155"/></marker><style>.h{font:700 22px system-ui;fill:#0f172a}.t{font:16px system-ui;fill:#334155}.b{rx:14;stroke-width:2}.l{stroke:#334155;stroke-width:3;marker-end:url(#a)}</style></defs>
+  <rect width="1100" height="470" fill="#fff"/><text class="h" x="550" y="45" text-anchor="middle">lane 不是“线程”，而是更新优先级与批次的位标记</text>
+  <rect class="b" x="55" y="85" width="230" height="70" fill="#fee2e2" stroke="#ef4444"/><text class="h" x="170" y="115" text-anchor="middle">离散输入</text><text class="t" x="170" y="142" text-anchor="middle">点击、键盘输入</text>
+  <rect class="b" x="55" y="190" width="230" height="70" fill="#fef3c7" stroke="#f59e0b"/><text class="h" x="170" y="220" text-anchor="middle">默认更新</text><text class="t" x="170" y="247" text-anchor="middle">普通 setState</text>
+  <rect class="b" x="55" y="295" width="230" height="70" fill="#dbeafe" stroke="#3b82f6"/><text class="h" x="170" y="325" text-anchor="middle">Transition</text><text class="t" x="170" y="352" text-anchor="middle">非紧急视图切换</text>
+  <rect class="b" x="415" y="145" width="270" height="165" fill="#ede9fe" stroke="#8b5cf6"/><text class="h" x="550" y="190" text-anchor="middle">Root pendingLanes</text><text class="t" x="550" y="225" text-anchor="middle">合并尚未完成的 lanes</text><text class="t" x="550" y="260" text-anchor="middle">挑选下一批 renderLanes</text>
+  <rect class="b" x="820" y="95" width="230" height="95" fill="#dcfce7" stroke="#22c55e"/><text class="h" x="935" y="135" text-anchor="middle">高优先级提交</text><text class="t" x="935" y="165" text-anchor="middle">尽快响应输入</text>
+  <rect class="b" x="820" y="280" width="230" height="95" fill="#e0f2fe" stroke="#0ea5e9"/><text class="h" x="935" y="320" text-anchor="middle">低优先级重试</text><text class="t" x="935" y="350" text-anchor="middle">可暂停、恢复或重做</text>
+  <line class="l" x1="285" y1="120" x2="410" y2="185"/><line class="l" x1="285" y1="225" x2="410" y2="225"/><line class="l" x1="285" y1="330" x2="410" y2="270"/><line class="l" x1="685" y1="195" x2="815" y2="145"/><line class="l" x1="685" y1="270" x2="815" y2="325"/>
+  <text class="t" x="550" y="420" text-anchor="middle">关键点：优先级影响“先算什么”，Commit 仍保持一致性，不会展示半棵树。</text>
+</svg>

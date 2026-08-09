@@ -1,6 +1,8 @@
 # React Diff 算法专题：原理、流程与 Vue 3 对比
 
 > 目标：系统梳理 React 的 Diff / Reconciliation（协调）机制，重点讲清楚 React 如何比较新旧 UI 树、如何处理列表、`key` 的作用、Fiber 在其中承担什么角色，以及它和 Vue 3 Diff 的核心区别。
+> 适用版本：以 React 19.x 与 Vue 3 当前稳定心智模型为主；源码片段均为**简化示意，并非源码原文**。业务示例使用 TSX，关键逻辑附中文注释。
+> 难度标签：`基础必会` `进阶重点` `高级深挖`。
 
 ---
 
@@ -26,7 +28,8 @@
 18. [高频问题与详细回答](#18-高频问题与详细回答)
 19. [完整总结](#19-完整总结)
 20. [记忆口诀](#20-记忆口诀)
-21. [参考资料](#21-参考资料)
+21. [关联专题](#21-关联专题)
+22. [参考资料](#22-参考资料)
 
 ---
 
@@ -42,7 +45,8 @@ React Diff 是 React 在更新 UI 时，用来比较“旧的 UI 描述”和“
 
 在 React 中，开发者写的是 JSX：
 
-```jsx
+```tsx
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 function App({ count }) {
   return <div>count: {count}</div>
 }
@@ -95,7 +99,8 @@ flowchart TD
 
 例如：
 
-```jsx
+```tsx
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 function App({ name }) {
   return (
     <div className="user-card">
@@ -158,7 +163,8 @@ React Diff 主要依赖两个假设：
 
 例如：
 
-```jsx
+```tsx
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 // old
 <div>
   <Counter />
@@ -178,7 +184,8 @@ React Diff 主要依赖两个假设：
 
 例如：
 
-```jsx
+```tsx
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 {list.map(item => (
   <li key={item.id}>{item.name}</li>
 ))}
@@ -291,17 +298,23 @@ flowchart LR
   F --> G[Real DOM]
 ```
 
+![React Element、Fiber 与 DOM 的关系](https://raw.githubusercontent.com/2530622506/interView-writing-/main/docs/react-interview/assets/react-element-fiber-dom.svg)
+
+Mermaid 图强调更新链路，本地图进一步区分三类对象的职责：Element 是不可变描述，Fiber 是可变工作单元，DOM 是 Commit 阶段更新的宿主节点。
+
 ### React Element 示例
 
 JSX：
 
-```jsx
+```tsx
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 <div className="box">hello</div>
 ```
 
 可以近似理解为：
 
 ```js
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 {
   type: 'div',
   key: null,
@@ -316,9 +329,10 @@ React Element 是不可变描述对象。每次 render 都会产生新的 Elemen
 
 ### Fiber 示例
 
-Fiber 可以近似理解为：
+Fiber 可以近似理解为（字段已简化）：
 
 ```js
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 {
   type: 'div',
   key: null,
@@ -426,7 +440,8 @@ key 是否相同
 
 例如：
 
-```jsx
+```tsx
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 // old
 <div>
   <span key="a">A</span>
@@ -504,7 +519,8 @@ React 认为它们不是同一个节点
 
 ### 7.4 新节点为空
 
-```jsx
+```tsx
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 function App({ show }) {
   return <div>{show ? <Child /> : null}</div>
 }
@@ -691,6 +707,7 @@ old[1] B 和 new[1] C：不匹配，中断
 建立 Map：
 
 ```js
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 existingChildren = {
   B.key -> oldFiber(B),
   C.key -> oldFiber(C),
@@ -785,7 +802,8 @@ React 中 `key` 到底有什么用？
 
 例如：
 
-```jsx
+```tsx
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 const users = [
   { id: 1, name: 'Alice' },
   { id: 2, name: 'Bob' },
@@ -840,11 +858,11 @@ React 怎么判断列表中的节点是否需要移动？
 
 ### 回答
 
-React 使用一个变量：
+React 使用一个变量 `lastPlacedIndex` 维护已确认稳定的旧索引边界：
 
-```js
-lastPlacedIndex
-```
+![React 列表移动判断](https://raw.githubusercontent.com/2530622506/interView-writing-/main/docs/react-interview/assets/diff-list-movement.svg)
+
+图中的 `A C B E` 例子说明：`C` 先把边界推进到旧索引 `2`，随后遇到旧索引为 `1` 的 `B`，便需要给 `B` 标记 `Placement`。这是一种启发式移动判断，不保证得到全局最少 DOM 移动次数。
 
 它表示：到目前为止，已经处理过的新列表节点中，它们在旧列表中出现过的最大位置。
 
@@ -860,7 +878,7 @@ lastPlacedIndex
   更新 lastPlacedIndex = oldIndex
 ```
 
-可以用伪代码表示：
+可以用伪代码表示（简化示意，并非 React 源码原文）：
 
 ```js
 function placeChild(newFiber, lastPlacedIndex, newIndex) {
@@ -1030,6 +1048,7 @@ new: [ A ][ C ][ B ][ E ]
 建立 Map：
 
 ```js
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 existingChildren = {
   B: oldFiber(B, index=1),
   C: oldFiber(C, index=2),
@@ -1141,7 +1160,8 @@ D 在 new 中不存在 -> 删除
 
 ### 12.1 使用 index 作为 key 的错误示例
 
-```jsx
+```tsx
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 function TodoList({ todos }) {
   return todos.map((todo, index) => (
     <TodoItem key={index} todo={todo} />
@@ -1196,7 +1216,8 @@ key=2 还是同一个节点
 
 使用稳定唯一的业务 id：
 
-```jsx
+```tsx
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 function TodoList({ todos }) {
   return todos.map(todo => (
     <TodoItem key={todo.id} todo={todo} />
@@ -1239,7 +1260,8 @@ React 会根据组件在 UI 树中的位置、组件类型和 key 来决定是�
 
 ### 13.1 同位置、同类型、同 key：保留状态
 
-```jsx
+```tsx
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 function App({ mode }) {
   return (
     <div>
@@ -1261,7 +1283,8 @@ new: position 0 -> Counter
 
 ### 13.2 同位置、不同类型：重置状态
 
-```jsx
+```tsx
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 function App({ mode }) {
   return (
     <div>
@@ -1284,7 +1307,8 @@ React 会卸载旧组件，挂载新组件，旧状态丢失。
 
 ### 13.3 同类型但 key 不同：重置状态
 
-```jsx
+```tsx
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 function Profile({ userId }) {
   return <UserForm key={userId} userId={userId} />
 }
@@ -1301,7 +1325,8 @@ new: UserForm key=2
 
 这常用于主动清空表单状态：
 
-```jsx
+```tsx
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 <UserForm key={selectedUserId} userId={selectedUserId} />
 ```
 
@@ -1315,7 +1340,8 @@ new: UserForm key=2
 
 例如：
 
-```jsx
+```tsx
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 function Chat({ contact }) {
   return <ChatInput key={contact.id} contact={contact} />
 }
@@ -1366,6 +1392,10 @@ Fiber 的思路是：
 ---
 
 ### 14.2 Fiber 双缓冲树
+
+![Fiber 双缓冲树](https://raw.githubusercontent.com/2530622506/interView-writing-/main/docs/react-interview/assets/fiber-double-buffer.svg)
+
+`current` 保存已提交版本，`workInProgress` 用于计算下一版本；两者通过 `alternate` 对应。只有完整完成 Render 的工作才会进入 Commit，不能把双缓冲理解为页面上同时存在两份 DOM。
 
 React 内部通常有两棵 Fiber 树：
 
@@ -1560,7 +1590,8 @@ return：父节点
 
 例如这棵 UI 树：
 
-```jsx
+```tsx
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 <App>
   <Header />
   <Main>
@@ -1812,7 +1843,7 @@ React 会：
 
 ```text
 创建新 Fiber
-标记 Placement 
+标记 Placement
 Commit 阶段插入 DOM
 ```
 
@@ -2020,6 +2051,7 @@ flowchart TD
 同步 work loop 类似：
 
 ```js
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 function workLoopSync() {
   while (workInProgress !== null) {
     performUnitOfWork(workInProgress)
@@ -2030,6 +2062,7 @@ function workLoopSync() {
 并发 work loop 类似：
 
 ```js
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 function workLoopConcurrent() {
   while (workInProgress !== null && !shouldYield()) {
     performUnitOfWork(workInProgress)
@@ -2052,7 +2085,7 @@ Fiber 架构下，Render 阶段可能被中断、重做或丢弃。因此 Render
 
 例如函数组件：
 
-```jsx
+```tsx
 function App() {
   // 不推荐：render 阶段直接修改外部变量或操作 DOM
   document.title = 'hello'
@@ -2065,7 +2098,8 @@ function App() {
 
 正确做法是把副作用放到 effect 中：
 
-```jsx
+```tsx
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 function App() {
   React.useEffect(() => {
     document.title = 'hello'
@@ -2117,7 +2151,8 @@ Commit 阶段：同步、不可中断、尽快完成。
 
 多个 Hook 会形成链表：
 
-```jsx
+```tsx
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 function Counter() {
   const [count, setCount] = React.useState(0)
   const [name, setName] = React.useState('A')
@@ -2149,7 +2184,8 @@ flowchart LR
 
 这也解释了为什么 Hooks 不能写在条件语句中：
 
-```jsx
+```tsx
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 function Counter({ enabled }) {
   const [a] = React.useState(1)
 
@@ -2187,7 +2223,8 @@ Fiber 架构不意味着每次都要完整处理整棵树。React 会尽量 bail
 
 例如：
 
-```jsx
+```tsx
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 const UserCard = React.memo(function UserCard({ user }) {
   return <div>{user.name}</div>
 })
@@ -2345,9 +2382,9 @@ Vue 3 有模板编译器，能够在编译阶段标记动态节点，运行时�
 | 列表 Diff | 先顺序比较，再 Map 查找剩余旧节点 | 头部同步、尾部同步、新增、删除、未知序列 |
 | 移动判断 | `lastPlacedIndex` | `maxNewIndexSoFar` + LIS |
 | 是否使用 LIS | 不使用 | 使用 |
-| 编译时优化 | JSX 通常是运行时表达，默认缺少 Vue 模板式 patch flag | patch flag、block tree、hoistStatic、cacheHandler |
+| 编译时优化 | JSX 是通用 JavaScript；React Compiler 可自动应用 memoization，但不生成 Vue 模板式 patch flag | patch flag、block tree、hoistStatic、cacheHandler |
 | 调度能力 | Fiber + lanes，强调优先级和可中断渲染 | 组件级响应式调度，更新粒度由响应式和编译优化共同决定 |
-| 静态节点跳过 | 主要靠 memo、编译器插件、手动优化等 | 编译器自动标记和提升静态节点 |
+| 静态节点跳过 | 运行时 bailout、`memo`，以及 React Compiler 自动 memoization | 编译器自动标记和提升静态节点 |
 | 状态保留规则 | 位置 + type + key | 组件实例复用依赖 type + key 等 |
 
 ---
@@ -2356,7 +2393,8 @@ Vue 3 有模板编译器，能够在编译阶段标记动态节点，运行时�
 
 React 的 JSX 非常灵活，本质上是 JavaScript 表达式：
 
-```jsx
+```tsx
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 function App({ items, renderItem }) {
   return (
     <div>
@@ -2366,7 +2404,7 @@ function App({ items, renderItem }) {
 }
 ```
 
-这种灵活性使 React 很难像 Vue 模板编译器那样静态分析出所有动态节点。React 通常需要在运行时通过 Fiber 机制协调更新。
+这种灵活性使 React 不采用 Vue 模板编译器同样的 patch flag / block tree 路径。React 仍以运行时 Fiber 协调为基础；稳定版 React Compiler 可以分析符合规则的组件并自动插入 memoization，但不会把 React 变成 Vue 的模板编译模型。
 
 当然，React 也有优化手段：
 
@@ -2375,7 +2413,7 @@ function App({ items, renderItem }) {
 - `useCallback`
 - key
 - Fiber lanes 优先级
-- 编译器或构建期优化方案
+- React Compiler 的自动 memoization（它不等同于 Vue 的模板 patch flags）
 
 但默认模型更偏运行时。
 
@@ -2388,6 +2426,7 @@ Vue 3 的模板相对受约束，编译器能静态分析模板结构。
 例如：
 
 ```vue
+<!-- 中文注释：该示例聚焦当前机制，省略无关工程细节。 -->
 <template>
   <div class="card">
     <h1>静态标题</h1>
@@ -2501,6 +2540,7 @@ old[0] A 和 new[0] D 不匹配，中断
 建立旧节点 Map：
 
 ```js
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 A -> oldIndex 0
 B -> oldIndex 1
 C -> oldIndex 2
@@ -2583,7 +2623,7 @@ React 的列表 Diff 选择了更简单的启发式策略：
 用 lastPlacedIndex 判断是否需要移动
 ```
 
-这种策略实现简单、成本低，并且在大多数业务列表场景中表现足够好。React 更核心的优化方向是 Fiber 调度、优先级、并发渲染、减少阻塞，而不是在列表移动中追求更少 DOM move。
+这种策略实现相对直接，并在常见业务列表场景中具有可接受的时间与空间成本。它不保证最少 DOM move；React 的整体更新体系还同时考虑 Fiber 调度、优先级与并发渲染，因此不能只用移动次数评价框架整体性能。
 
 Vue 3 因为模板编译器和运行时 Diff 的协同设计，在 keyed children 的未知序列中加入 LIS，能进一步减少移动。
 
@@ -2611,7 +2651,8 @@ React 不做通用树编辑距离，也不跨层寻找节点，所以不会追�
 
 例如：
 
-```jsx
+```tsx
+// 中文注释：该示例聚焦当前机制，省略无关工程细节。
 // old
 <div><Counter /></div>
 
@@ -2670,7 +2711,7 @@ Render 阶段的 Diff 不直接操作 DOM，它主要创建或复用 Fiber，并
 
 ## 19. 完整总结
 
-React Diff 是 React 更新机制中的协调过程。状态或 props 变化后，组件会重新执行，生成新的 React Element 树。React 在 Render 阶段用新的 Element 和旧 Fiber 树进行比较，构建新的 workInProgress Fiber 树。比较过程中，如果新旧节点的 key 和 type 相同，就复用旧 Fiber 和 DOM，只更新 props 或 children；如果 key 或 type 不同，就不能复用，旧节点会被删除，新节点会被创建。
+React Diff 是 React 更新机制中的协调过程。状态或 props 变化后，组件会重新执行，生成新的 React Element 树。React 在 Render 阶段用新的 Element 和旧 Fiber 树进行比较，构建新的 workInProgress Fiber 树。比较过程中，如果兄弟范围内的 `key` 匹配且元素 `type` 可兼容，React 会复用对应 Fiber，并尽量复用其下可兼容的宿主节点；如果身份不兼容，就创建新 Fiber 并删除旧分支。函数组件 Fiber 的复用不代表它输出的每个 DOM 都必然不变，子树仍需继续协调。
 
 对于单节点，React 主要比较 key 和 type。对于数组 children，React 会先从左到右按位置比较，能复用就继续；一旦遇到不匹配，就停止第一轮。如果新节点已经遍历完，则删除剩余旧节点；如果旧节点已经遍历完，则创建剩余新节点；如果新旧都还有剩余，就把剩余旧 Fiber 放入 Map，然后遍历剩余新节点，通过 key 或 index 查找可复用 Fiber。找到则复用，找不到则创建。遍历结束后，Map 中剩余旧节点被删除。
 
@@ -2722,7 +2763,16 @@ Vue 3：编译时标记 + 运行时 patch + LIS 减少移动。
 
 ---
 
-## 21. 参考资料
+
+## 21. 关联专题
+
+- [React 面试知识总纲](./react-interview-guide.md)
+- [React 核心与组件模型](./react-core-and-component-model.md)
+- [状态更新与渲染](./react-state-and-rendering.md)
+- [Fiber、并发与现代 React](./react-fiber-concurrency-and-modern-react.md)
+- [性能与工程化](./react-performance-and-engineering.md)
+
+## 22. 参考资料
 
 - React 官方旧版文档：Reconciliation，https://legacy.reactjs.org/docs/reconciliation.html
 - React 官方文档：Render and Commit，https://react.dev/learn/render-and-commit
