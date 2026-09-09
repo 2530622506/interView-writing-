@@ -105,7 +105,7 @@ mindmap
 | Dedicated Worker 线程 | 执行 Worker 中的 JavaScript | 适合可拆分的 CPU 密集任务，但不能直接操作 DOM |
 | Service Worker 线程 | 处理 Service Worker 事件，如 fetch、push、sync | 生命周期由浏览器管理 |
 
-### 面试官追问：Worker 能让 DOM 操作并行吗？
+### 追问：Worker 能让 DOM 操作并行吗？
 
 不能。Worker 没有普通页面 DOM 的直接访问能力。它适合把计算从主线程移走，例如大 JSON 解析、图像像素处理、复杂排序和加密计算；结果需要通过 `postMessage`、Transferable 或 `SharedArrayBuffer` 等机制传回页面。
 
@@ -273,7 +273,11 @@ sequenceDiagram
   Note over C,S: ESTABLISHED，可以传输应用数据
 ```
 
-#### 第一次握手：客户端发送 SYN
+#### 第一次握手：客户端发送 SYN（**Synchronize Sequence Numbers**-（同步序列号））
+
+Seq（**Sequence Number**（序列号））
+
+Ack(**Acknowledgment Number**（确认号）)
 
 客户端向服务端发送一个 TCP 报文，并设置：
 
@@ -666,6 +670,12 @@ IndexedDB 是浏览器提供的异步、事务化、面向对象的本地数据�
 ### 高频面试追问：Token 放 localStorage 安全吗？
 
 不能只回答“安全”或“不安全”。localStorage 里的 Token 不会自动随请求发送，使用方便，但同源 XSS 可以直接读取它。若放在 HttpOnly Cookie，脚本不能直接读取，但需要认真处理 CSRF、SameSite、跨站请求和会话失效。安全方案取决于威胁模型和整体防护，而不是一个存储位置决定全部安全性。
+
+
+
+
+
+
 
 ---
 
