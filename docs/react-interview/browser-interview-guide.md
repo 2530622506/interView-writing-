@@ -28,6 +28,7 @@ mindmap
       TCP / QUIC
       TLS
       HTTP
+      重定向
     缓存
       强缓存
       协商缓存
@@ -41,6 +42,8 @@ mindmap
       IndexedDB
       Token
     渲染
+      Parser
+      Preload Scanner
       DOM
       CSSOM
       Render Tree
@@ -48,6 +51,7 @@ mindmap
       Paint
       Composite
     性能
+      FCP / LCP / INP
       关键渲染路径
       长任务
       回流重排
@@ -56,8 +60,10 @@ mindmap
     并发与部署
       Worker
       Service Worker
+      bfcache
       SSR
       CSR
+      Streaming SSR
 ```
 
 ---
@@ -136,28 +142,32 @@ flowchart TD
   B -- 是 --> C[拼接搜索引擎 URL]
   B -- 否 --> D[解析 URL]
   C --> D
-  D --> E{命中可用缓存吗}
-  E -- 强缓存 --> F[直接读取缓存响应]
-  E -- 未命中 --> G[DNS 解析域名]
-  G --> H[建立连接]
-  H --> I{HTTPS}
-  I -- 是 --> J[TLS 握手]
-  I -- 否 --> K[发送 HTTP 请求]
-  J --> K
-  K --> L[服务器处理并返回响应]
-  L --> M[浏览器接收字节流]
-  F --> M
-  M --> N[解析 HTML，构建 DOM]
-  N --> O[解析 CSS，构建 CSSOM]
-  O --> P[Render Tree]
-  P --> Q[Layout / Paint / Composite]
-  Q --> R[首屏显示并继续加载子资源]
+  D --> E[导航安全策略与 Service Worker 检查]
+  E --> F{已有响应可直接使用吗}
+  F -- Service Worker 或新鲜缓存 --> G[得到可用 Response]
+  F -- 否 --> H{连接可复用吗}
+  H -- 否 --> I[DNS 解析域名]
+  I --> J[按协议建立 TCP、TLS 或 QUIC 连接]
+  H -- 是 --> K[复用已有连接]
+  J --> N[发送 HTTP 请求或条件请求]
+  K --> N
+  N --> O[服务器、CDN 或代理返回响应]
+  O --> P{响应状态}
+  P -- 3xx 重定向 --> D
+  P -- 304 未修改 --> G
+  P -- 其他可展示响应 --> G
+  G --> Q[解码并流式消费响应体]
+  Q --> R[Parser 与 Preload Scanner 交错工作]
+  R --> S[构建 DOM、CSSOM 和 Render Tree]
+  S --> T[Style / Layout / Paint / Raster / Composite]
+  T --> U[首屏显示并继续加载子资源]
 ```
 
 **读图重点：**
 
-- 命中强缓存时，网络请求可能直接被省掉；这就是缓存对瀑布图的影响。
-- HTTPS 不是 HTTP 之后额外发送一个普通业务请求，而是在发送 HTTP 数据前完成 TLS 协商。
+- 命中 Service Worker 或新鲜的强缓存时，网络请求可能直接被省掉；缓存过期后则可能携带验证头发起条件请求。
+- Service Worker、缓存命中、连接复用和 bfcache 都可能让链路短路，不能把每次导航都当成首次访问。
+- HTTPS 不是 HTTP 之后额外发送一个普通业务请求，而是在发送 HTTP 数据前建立安全通道；HTTP/3 使用集成 TLS 1.3 的 QUIC。
 - 页面显示不是“所有资源下载完才开始”，HTML 解析、子资源发现和渲染通常会交错进行。
 - 首屏显示、DOMContentLoaded、load 和页面完全空闲是不同时间点。
 
@@ -244,6 +254,23 @@ sequenceDiagram
 ```
 
 > HTTP/2 通常仍运行在 TLS + TCP 之上；HTTP/3 则基于 QUIC，而 QUIC 运行在 UDP 之上。回答协议问题时要先确认面试官讨论的是哪一代 HTTP。
+
+### TLS 握手不只是“交换证书”
+
+以常见的 TLS 1.3 为例，握手主要解决三个问题：**协商参数、验证身份、生成会话密钥**。
+
+1. 客户端通过 `ClientHello` 发送支持的 TLS 版本、密码套件、随机数和密钥共享等信息；通常还会携带 SNI，告诉服务端想访问的主机名，并通过 ALPN 协商使用 `h2`、`http/1.1` 等应用层协议。
+2. 服务端选择参数、返回自己的密钥共享和证书链，并用证书对应的私钥证明身份。
+3. 浏览器验证证书链是否能连接到受信任根证书，还会检查主机名、有效期、用途等条件。证书“能解密 HTTPS 内容”是错误说法：现代 TLS 中证书主要用于身份认证和握手签名，业务数据通常由握手协商出的对称密钥加密。
+4. 双方基于密钥交换结果派生会话密钥，校验握手完整性，之后才传输加密的 HTTP 数据。
+
+再次访问时，TLS session resumption（会话恢复）可能减少握手成本；TLS 1.3 的 `0-RTT` 能更早发送部分数据，但存在重放风险，不能把非幂等业务无条件放进 early data。HTTP/3 的 TLS 1.3 握手集成在 QUIC 建连中，因此不能把它机械画成“UDP → TCP 握手 → TLS 握手”。
+
+### HTTP/2 和 HTTP/3 为什么仍可能让页面慢？
+
+- HTTP/2 可以在一个连接中多路复用多个 stream，减少 HTTP/1.1 层面的请求排队，但底层仍是一个 TCP 字节流；发生丢包时，TCP 的有序交付可能让多个 stream 一起等待。
+- HTTP/3 把 stream 多路复用放到 QUIC 中，一个 stream 的丢包通常不会阻塞其他 stream 的有序交付；但它仍受拥塞控制、网络质量、服务器调度和资源优先级影响。
+- 多路复用不等于“资源越多越好”。过大的 JavaScript、错误的资源优先级和主线程长任务不会因为协议升级自动消失。
 
 ## 2.6 TCP 三次握手：连接是怎样建立的？
 
@@ -419,6 +446,296 @@ sequenceDiagram
 - `TIME-WAIT` 多出现在主动关闭方，不是“连接还在正常传输”，而是主动关闭方在保护连接关闭过程。
 - `Connection: keep-alive` 不是让 TCP 永远不关闭，而是允许连接复用，具体仍受超时和协议版本影响。
 - HTTP 请求结束不等于 TCP 连接立刻关闭；HTTP/1.1、HTTP/2 通常会尽量复用连接。
+
+## 2.8 浏览器如何构造请求并处理 HTTP 响应？
+
+### 导航请求是怎样构造的？
+
+在地址栏确认一个 URL 后，浏览器发起的是 navigation request（导航请求）。地址栏直接导航通常使用 `GET`，但一次页面导航也可能来自表单提交、历史记录或脚本，因此不能把所有导航都断言成 `GET`。在真正发送前，浏览器还可能先做：
+
+- 根据 HSTS 记录或升级策略把 HTTP 改为 HTTPS；
+- 执行端口限制、恶意网址检测、企业策略等安全检查；
+- 判断目标作用域是否受一个已激活的 Service Worker 控制；
+- 查询 HTTP Cache，决定直接复用、重新验证还是完整请求；
+- 根据 URL、SameSite、Domain、Path、Secure 等规则选择要附带的 Cookie。
+
+请求行与请求头会表达资源和客户端能力，例如：
+
+```http
+GET /docs/index.html?a=1 HTTP/1.1
+Host: www.example.com
+Accept: text/html,application/xhtml+xml
+Accept-Encoding: gzip, br
+If-None-Match: "page-v3"
+Cookie: sid=abc123
+```
+
+这是便于观察语义的 HTTP/1.1 写法；在 HTTP/2、HTTP/3 中，请求会编码成 header block 和 frame，不再按这段纯文本原样传输。还要注意 4 个边界：
+
+1. Fragment 不进入请求目标，所以服务端看不到 `#intro`。
+2. `Cookie` 是否发送由 Cookie 属性、请求上下文和浏览器隐私策略共同决定，不是“同域就一定全部携带”。
+3. `Referer` 会受到 `Referrer-Policy` 控制；`Origin` 也不是每个请求都必然携带。
+4. 顶层跨站导航是 Web 的基础能力，一般不按 `fetch` / XHR 的 CORS 读取规则直接禁止；但脚本跨源读取响应、iframe 嵌入和子资源加载还会分别受到 CORS、CSP、CORP / COEP 等机制约束。
+
+### 请求到达源站之前可能经过什么？
+
+“浏览器把请求发给服务器”通常是简化表达。真实生产链路可能是：
+
+```text
+Browser → CDN / Edge → WAF → Reverse Proxy / Load Balancer
+        → Application → Cache / Database / Upstream Service
+```
+
+CDN 可能直接返回缓存内容，WAF 可能拦截请求，反向代理可能终止 TLS、压缩响应或转发到某个实例，应用还可能等待数据库和下游服务。因此 TTFB（Time to First Byte）不只是“后端代码执行时间”，它还包含连接、请求上传、代理排队、服务端计算以及首字节返回的网络耗时。排查 TTFB 时要结合 `Server-Timing`、CDN 日志、网关指标和服务端 trace，而不是只看前端瀑布图。
+
+### 浏览器如何处理响应？
+
+建立连接并不等于页面马上得到 HTML。浏览器首先要读取响应头，再根据响应头决定后续动作。面试时可以把响应处理拆成“状态判断、表示解码、缓存处理、响应体交付”四层。
+
+### 先看状态码：这个响应能不能继续作为文档？
+
+常见状态的处理并不相同：
+
+| 状态 | 浏览器通常做什么 | 面试时的关键点 |
+|---|---|---|
+| `2xx` | 把响应体交给对应的资源加载器 | `200` 不代表一定是 HTML，还要看 `Content-Type` |
+| `3xx` | 根据 `Location` 发起新的导航或子资源请求 | 重定向可能形成多跳，每一跳都可能重新走缓存、连接和安全检查 |
+| `304` | 不接收新的正文，复用本地缓存副本 | `304` 是服务器对条件请求的响应，不是浏览器自己“生成”的 |
+| `4xx` | 认为请求存在客户端侧问题，具体是否展示错误页由浏览器和站点决定 | `401`、`403`、`404` 的含义不同，不能统称为“请求失败” |
+| `5xx` | 认为服务端处理失败 | 可能在代理、网关、源站等不同层产生 |
+
+重定向不是一次请求中的“内部跳转”。例如 `http://example.com` 返回 `301` 到 HTTPS，浏览器通常要重新创建导航请求；如果目标来源不同，还要重新判断 DNS、连接复用、Cookie 和安全策略等条件。永久重定向也可能被浏览器缓存，实际行为不能只根据一次 Network 面板记录推断。
+
+### 再看表示层：字节怎样变成文本？
+
+响应体首先是字节序列，浏览器要根据元信息把它还原为可解析内容：
+
+- `Content-Encoding: gzip/br/zstd` 表示传输压缩，浏览器先解压，再把解压后的内容交给 HTML、CSS 或 JavaScript 解析器；它和 `Content-Type` 不是一回事。
+- `Content-Type: text/html` 告诉浏览器按 HTML 文档处理；如果 MIME 类型不正确，可能触发下载、拒绝执行或 MIME sniffing 相关策略。
+- 字符编码通常由 HTTP `charset`、HTML `<meta charset>` 和默认规则共同决定。HTML 的字符编码声明应尽早出现，否则前面已经解码的内容可能需要重新解释。
+- `Content-Length` 能告诉接收方正文长度；HTTP/1.1 也可以使用 `Transfer-Encoding: chunked` 进行分块传输。HTTP/2 和 HTTP/3 以 frame 为传输单位，但应用层仍可看到一个连续的响应体。
+
+因此，“收到响应”不等于“收到完整 HTML”。浏览器可以在响应体持续到达时把字节送进解析器；只要关键结构和样式已经具备，就可能先发生第一次绘制。
+
+### 响应体会交给谁？
+
+现代浏览器通常会把网络访问、浏览器协调和页面渲染拆到不同进程或线程中，具体进程名称因浏览器实现而不同。可以用职责理解：网络层负责获取字节，浏览器进程负责导航和安全策略，Renderer 进程负责当前页面的解析、脚本和渲染。这里不是每个响应都会直接“传给一个固定线程”，而是由资源加载器、缓存、Service Worker 和渲染器协同完成。
+
+如果 Service Worker 控制了当前页面，导航请求可能先经过它的 `fetch` 事件；它可以返回缓存响应、拼装响应，或者继续请求网络。这个阶段甚至可能没有传统意义上的源站请求，所以回答“输入 URL 后一定先访问服务器”是不准确的。
+
+## 2.9 HTML 是边下载边解析的：Parser 与 Preload Scanner
+
+### HTML 不需要完整下载后才开始解析
+
+浏览器拿到一段 HTML 字节后，通常会执行类似下面的流水线：
+
+```text
+字节流
+  → 字符解码
+  → Tokenizer（词法切分）
+  → HTML Parser（处理标签和插入模式）
+  → DOM 节点
+```
+
+HTML Parser 不是一个简单的正则表达式扫描器。HTML 存在自动补全、嵌套修正、表格插入模式和脚本暂停等规则；例如没有显式写出的 `html`、`head`、`body` 节点，浏览器也可能在 DOM 中创建。因此面试时不要说“浏览器用正则把 HTML 转成 DOM”。
+
+### Preload Scanner 解决什么问题？
+
+普通 HTML Parser 遇到同步脚本时可能暂停，但网络请求不一定要等 Parser 完全恢复。浏览器通常会使用预加载扫描器（preload scanner）快速扫描尚未完成解析的 HTML，提前发现：
+
+- `<link rel="stylesheet">`；
+- 普通脚本、`defer` 脚本和模块脚本；
+- `<img>`、`<picture>`、`srcset` 中的候选图片；
+- 字体、预加载资源和部分内嵌资源。
+
+它的目标是提前发起下载，不是提前执行脚本，也不是替代真正的 HTML Parser。动态创建的资源、依赖脚本计算出的 URL、写在 CSS 中的背景图，通常要等后续处理才能发现。
+
+### 资源发现顺序会影响性能
+
+一个首屏大图如果只在较晚执行的 JavaScript 中创建，浏览器发现它的时间就会晚于直接写在 HTML 中的 `<img>`。这会增加资源发现延迟（resource discovery delay），即使图片服务器本身响应很快，LCP 也可能被推迟。
+
+`preload`、`modulepreload`、`preconnect` 的作用要区分：
+
+| 机制 | 提前什么 | 不解决什么 |
+|---|---|---|
+| `preconnect` | DNS、连接和 TLS 等建连步骤 | 不会自动下载具体资源 |
+| `preload` | 指定资源的下载 | 不会替代资源在文档中的真实使用，类型或跨域配置不匹配会造成浪费 |
+| `modulepreload` | 模块及其依赖图的预加载 | 不会绕过模块执行和依赖解析 |
+| `dns-prefetch` | DNS 查询 | 不会建立 TCP、QUIC 或 TLS 连接 |
+
+过度使用这些提示会抢占真正关键资源的带宽和连接，因此优化前应先用 Performance、Network 和优先级信息确认关键路径。
+
+## 2.10 DOM、CSSOM 与 Render Tree：为什么不是解析完 HTML 就显示？
+
+HTML 和 CSS 描述的是“结构”和“规则”，而屏幕需要的是带有最终几何信息和绘制指令的像素。中间至少有以下几个概念：
+
+1. **DOM（Document Object Model）**：HTML 解析后形成的文档节点树，反映结构和属性。
+2. **CSSOM（CSS Object Model）**：CSS 解析后形成的规则结构，浏览器还需要将层叠、继承、选择器匹配等规则应用到元素上。
+3. **Computed Style**：某个元素在层叠、继承和默认样式处理后的最终样式值。
+4. **Render Tree**：把参与视觉呈现的节点和计算样式组织起来的渲染结构。
+
+Render Tree 不是 DOM 的复制品：
+
+- `display: none` 的节点通常不进入 Render Tree，也不参与布局；
+- `visibility: hidden` 通常仍占据布局空间，只是不绘制可见内容；
+- `opacity: 0` 仍可能参与绘制和命中测试，不能简单当成“完全不存在”；
+- `::before`、`::after` 等伪元素没有普通 DOM 节点，但可能生成可绘制内容；
+- Shadow DOM、iframe 和替换元素（例如图片、视频）有自己的渲染边界。
+
+CSS 不一定阻塞 HTML Parser 建立 DOM，但首次绘制要依赖足够的样式信息；同步脚本如果读取 `getComputedStyle()` 或布局信息，还可能迫使浏览器等待 CSS 加载和样式计算。更准确的说法是：**CSS 通常阻塞依赖它的渲染和部分脚本执行，而不是简单地阻塞所有 DOM 构建。**
+
+## 2.11 JavaScript 为什么会改变这条链路？
+
+脚本不仅是页面资源，也是可以观察和修改 DOM、CSSOM、网络请求及事件循环的执行者。因此脚本会改变“浏览器原本可以并行推进”的流程。
+
+### 四种脚本加载语义
+
+| 写法 | 下载 | 执行时机 | 顺序保证 | 典型用途 |
+|---|---|---|---|---|
+| `<script src="a.js">` | 通常会触发下载 | 遇到标签时执行，Parser 通常暂停 | 按文档位置 | 依赖当前解析位置的传统脚本 |
+| `defer` | 与 HTML 解析并行 | HTML 解析完成后、`DOMContentLoaded` 前 | 多个 `defer` 按文档顺序 | 依赖完整 DOM 的主业务脚本 |
+| `async` | 与 HTML 解析并行 | 下载完成后尽快执行 | 不保证多个脚本顺序 | 相互独立的统计和广告脚本 |
+| `type="module"` | 按模块依赖图加载 | 默认具有延迟执行特征 | 受依赖图和顶层 `await` 影响 | 现代模块化应用 |
+
+“下载并行”不等于“执行并行”。普通页面 JavaScript 的执行通常仍在 Renderer 主线程上，脚本执行期间会阻塞该线程上的 DOM 操作、样式计算、布局和部分绘制工作。Web Worker 可以分担计算，但不能直接操作页面 DOM。
+
+### `document.write()` 为什么特殊？
+
+当 Parser 正在处理文档时，`document.write()` 可能把字符串重新插入当前解析位置，改变后续输入内容；如果文档已经完成加载，浏览器还可能清空当前文档或采取与历史行为兼容的处理。因此它会让预加载、脚本顺序和解析状态都变得难以推断，现代应用通常不应依赖它。
+
+动态插入的 `<script>`、`import()` 和由脚本创建的图片都遵循“脚本执行后才发现”的路径。它们适合按需加载，但如果被用于首屏关键资源，可能增加发现延迟。
+
+## 2.12 从 Render Tree 到像素：Layout、Paint、Raster、Composite
+
+拿到 Render Tree 还没有得到屏幕像素。可以按主线程与合成线程协作理解后续阶段：
+
+1. **Style Recalculation**：根据 DOM、CSSOM 和样式变化重新计算受影响节点的样式。
+2. **Layout / Reflow**：计算盒模型、尺寸、位置、文本换行以及子树之间的几何关系。改变 `width`、`font-size`、`display` 等属性通常可能影响布局。
+3. **Paint**：把背景、边框、文字、阴影等绘制操作记录成绘制指令，而不是直接把每个元素画成一张图片。
+4. **Raster**：将绘制指令栅格化为位图瓦片，可能由 GPU 或栅格线程完成；具体职责依浏览器和硬件而变化。
+5. **Composite**：把不同图层按顺序、透明度、变换矩阵等合成，提交给显示系统。
+
+`transform` 和 `opacity` 在条件合适时可以只触发合成阶段，减少主线程布局和绘制压力，但“上了 GPU 就一定流畅”是错误理解：图层创建会占用显存，过多图层会增加栅格和合成成本，动画内容本身也可能触发重新绘制。最终要结合 DevTools 的 Frames、Main、Layers 和 Memory 面板判断。
+
+这里还要区分两类“显示”：浏览器完成一次合成提交，不代表用户已经看到稳定的首屏；图片可能仍在解码，字体可能仍在交换，下一帧也可能因为长任务而延迟。
+
+## 2.13 页面什么时候算“显示出来”？
+
+面试中“页面加载完成”至少有 5 种含义，不能只回答一个事件：
+
+| 时间点 | 含义 | 能说明什么 |
+|---|---|---|
+| `FP`（First Paint） | 首次产生任何像素 | 页面开始有视觉输出，但内容可能只是背景或非文本元素 |
+| `FCP`（First Contentful Paint） | 首次绘制文本、图片、非白色 Canvas 等内容 | 用户开始看到有意义内容的时间 |
+| `LCP`（Largest Contentful Paint） | 视口内最大文本或图片内容完成绘制 | 常用于衡量首屏主要内容出现速度 |
+| `DOMContentLoaded` | HTML 文档解析完成，且延迟脚本执行完成 | DOM 可用，但图片、字体等资源未必完成 |
+| `load` | 文档及其依赖资源满足加载条件 | 资源加载阶段的事件，不等于可交互或不卡顿 |
+
+还要注意：
+
+- `LCP` 可能被后续更大的元素刷新，不能把 HTML 收到的时间当成 LCP；
+- `DOMContentLoaded` 可能被 `defer`、模块依赖和顶层 `await` 推迟；
+- `load` 受到图片、iframe 等资源影响，但不保证后续异步请求已完成；
+- “首屏已显示”和“可以顺畅操作”是不同指标。长 JavaScript 任务可能让 FCP 很早发生，却让点击响应很晚。
+
+现代性能分析还会关注 **INP（Interaction to Next Paint）**，它衡量交互从输入到下一次视觉更新的延迟；Long Task 则帮助定位主线程被单个任务占用超过 50 ms 的情况。不要把历史上的 TTI（Time to Interactive）当成唯一结论，应结合页面类型、用户交互和实际 RUM 数据解释。
+
+## 2.14 事件循环如何参与首帧和后续绘制？
+
+页面展现不是渲染流水线执行一次就结束，而是事件循环不断处理任务并寻找绘制机会：
+
+```text
+Task（脚本、事件、定时器）
+  → 清空 Microtask（Promise、queueMicrotask）
+  → 浏览器到达渲染机会
+  → requestAnimationFrame 回调
+  → Style / Layout / Paint / Composite
+```
+
+这是便于面试表达的抽象顺序，真实浏览器还会受帧率、页面是否可见、调度优先级和渲染器实现影响。几个容易被追问的点：
+
+- `Promise.then()` 是微任务。微任务会在当前任务结束后持续清空；如果递归添加微任务，可能迟迟不给浏览器绘制机会。
+- `setTimeout(fn, 0)` 只是把函数放入后续任务队列，存在最小延迟和调度竞争，不代表立即执行。
+- `requestAnimationFrame` 适合在下一次绘制前读取或更新动画状态，但回调中执行重计算仍然会掉帧。
+- `await` 让出的是 JavaScript 执行机会，后续 continuation 通常以微任务形式继续，并不会自动把工作移到 Worker。
+
+因此，页面即使已经完成 FCP，后续同步脚本、微任务洪泛或强制同步布局仍可能阻塞下一帧和用户交互。性能排查要同时看 Network 的加载、Main 的任务、Frames 的帧耗时和 Experience 的 Web Vitals。
+
+## 2.15 首次访问、刷新、强制刷新与前进后退有什么不同？
+
+“重新打开同一个 URL”不必然重复完整链路。影响因素包括 HTTP Cache、memory cache、磁盘缓存、Service Worker、连接池和 bfcache（back-forward cache，前进后退缓存）。
+
+| 场景 | 可能复用的内容 | 不能绝对保证的事情 |
+|---|---|---|
+| 首次访问 | 进程级连接、DNS 或共享缓存中已有的结果 | 不一定真的“全新”，系统可能已有 DNS 或连接缓存 |
+| 普通刷新 | 部分连接、缓存副本、协商缓存 | 是否重新验证取决于刷新策略、缓存头和浏览器实现 |
+| 强制刷新 | 通常会绕过或重新验证更多缓存 | 仍可能受 Service Worker、代理和浏览器策略影响 |
+| 前进后退 | 可能从 bfcache 恢复 DOM、JS 堆和滚动位置 | 页面被哪些条件排除出 bfcache，要看生命周期和浏览器策略 |
+
+命中 memory cache 或 disk cache 时，Network 面板可能显示不同的 `from memory cache`、`from disk cache` 或 `304`。它们的含义不同：前两者可能无需网络验证，`304` 则已经向服务器发起了条件请求。Service Worker 命中时，还要查看 `from ServiceWorker` 以及其 `fetch` 逻辑。
+
+前进后退恢复 bfcache 时，页面可能连 DOM 和 JavaScript 内存都一起恢复，不是重新执行完整的导航流程；此时应用需要正确处理 `pageshow`、`pagehide`，并检查恢复后的数据是否仍然新鲜。
+
+## 2.16 SSR、CSR 与 Streaming SSR 在链路中的位置
+
+渲染模式改变的是“可展示 HTML 从哪里来、何时到达”，不会取消浏览器的解析和渲染阶段。
+
+### CSR（Client-Side Rendering）
+
+服务器先返回一个较小的 HTML 壳，浏览器下载 JavaScript，再由客户端请求数据、创建 DOM。优点是交互模型直接、页面切换灵活；风险是关键内容可能要等脚本下载、执行和数据请求后才能出现，LCP 和 JavaScript 主线程成本容易受到影响。
+
+### SSR（Server-Side Rendering）
+
+服务端先生成带内容的 HTML，浏览器可更早解析并绘制文本。之后仍要下载 JavaScript 并进行 **Hydration（水合）**，把静态 HTML 与事件处理、组件状态连接起来。SSR 改善了内容到达时间，不代表“无需 JavaScript”，也不保证首次点击立刻可用。
+
+### Streaming SSR
+
+服务端分段发送 HTML，浏览器可以在完整响应到达前开始解析和绘制；React 等框架还可以配合 Suspense 逐步输出内容。它同时引入了更复杂的顺序、占位符、错误边界和 Hydration 调度问题：服务器发送得早，不等于客户端一定能立刻完成交互。
+
+面试时应把指标拆开说：SSR 可能改善 TTFB 后的内容可见时间和 FCP，但服务端生成时间会影响 TTFB，Hydration 和大包体又可能影响 INP；最终要看真实内容、网络质量和设备性能，而不是简单断言 SSR 一定比 CSR 快。
+
+## 2.17 面试完整回答模板
+
+### 30 秒版本
+
+> 用户输入 URL 后，浏览器先判断是 URL 还是搜索词，再解析协议、域名、端口、路径和参数。随后会先检查 Service Worker、HTTP 缓存和已有连接；没有可复用结果时才进行 DNS、TCP 或 QUIC 建连，HTTPS 还要完成 TLS，然后发送 HTTP 请求。响应返回后，浏览器会边接收边解析 HTML，预加载扫描器并行发现 CSS、脚本、图片和字体，逐步构建 DOM 和 CSSOM。两者经过样式计算形成 Render Tree，再经过 Layout、Paint、Raster 和 Composite，产生首帧；与此同时 JavaScript、事件循环和后续资源加载仍可能继续影响页面交互和绘制。
+
+### 2 分钟版本
+
+回答时可以补充 3 个边界：
+
+1. **网络边界**：DNS、TCP、TLS、HTTP 属于不同层；HTTP/3 使用 QUIC over UDP，不应机械地说所有 HTTPS 都先 TCP 三次握手。
+2. **解析边界**：响应不必完整下载后才解析，HTML Parser、preload scanner 和资源加载器会交错工作；同步脚本可能暂停 Parser，`defer`、`async` 和模块脚本的执行时机不同。
+3. **渲染边界**：DOM 不等于最终画面，CSSOM、样式计算、Render Tree、布局、绘制、栅格化和合成共同决定像素；`DOMContentLoaded`、`load`、FCP、LCP 和可交互时间也不是同一时刻。
+
+### 5 分钟深挖版本的组织方式
+
+当面试官继续追问时，建议沿着“现象 → 阶段 → 瓶颈 → 优化”展开：
+
+1. 页面白屏：先区分 TTFB、HTML 下载、CSS 阻塞、脚本执行、首屏资源发现和主线程长任务。
+2. LCP 慢：看最大内容是谁、它何时被发现、是否被 CSS 或字体阻塞、图片是否解码过晚、是否有服务端和 CDN 问题。
+3. 交互卡顿：看 Long Task、脚本拆分、微任务、强制同步布局和组件更新范围，不要只看网络是否加载完成。
+4. 刷新变快：区分 memory/disk cache、协商缓存、Service Worker、连接复用和 bfcache，确认到底省掉了哪一步。
+5. 首屏方案：根据内容类型选择 CSR、SSR 或 Streaming SSR，并同时评估 TTFB、FCP、LCP、Hydration 和 INP。
+
+## 2.18 常见错误答案纠正表
+
+| 错误说法 | 更准确的说法 |
+|---|---|
+| 输入 URL 后一定先 DNS | 可能命中 Service Worker、缓存、hosts、DNS 缓存或已有连接；只有需要解析且没有可用结果时才进行网络 DNS 查询 |
+| HTTP 请求一定要等 HTML 下载完 | 响应通常是流式到达的，浏览器可以边接收边解析和发现子资源 |
+| CSS 会阻塞 DOM 构建 | CSS 主要影响样式计算、渲染和可能依赖样式的脚本执行，不应简单说成阻塞所有 DOM Parser |
+| JavaScript 在独立线程执行 | 普通页面脚本主要运行在 Renderer 主线程；Worker 可分担计算，但不能直接操作 DOM |
+| DOM 树就是页面最终显示 | 还要经过 CSSOM、样式计算、Render Tree、Layout、Paint、Raster 和 Composite |
+| `load` 代表页面可以交互 | `load` 只表示一组资源加载条件满足；脚本长任务仍可能让页面无法及时响应 |
+| GPU 负责所有渲染 | 样式、布局和大量绘制仍可能由主线程完成，GPU 主要参与部分栅格和合成 |
+| HTTPS 必然基于 TCP | HTTP/1.1、HTTP/2 通常基于 TCP；HTTP/3 基于 QUIC，而 QUIC 运行在 UDP 之上 |
+| TCP 三次握手属于 HTTP | 三次握手属于 TCP 传输层；HTTP 只是使用已经建立的传输通道传递应用数据 |
+| 页面显示必须等所有资源完成 | 浏览器可以先完成 FCP 或 LCP，非关键图片、字体、脚本和异步数据还可能继续加载 |
+| 304 表示浏览器没有发请求 | 浏览器发出了条件请求，服务器判断资源未变化后返回 `304`，浏览器复用本地正文 |
+| SSR 返回 HTML 后就不需要 JavaScript | SSR 通常仍需要 Hydration 来恢复事件和状态；服务器渲染和客户端交互是两个阶段 |
+
+> **答题收束句**：这道题真正考察的不是能否背出一串名词，而是能否说明每个阶段解决什么问题、下一阶段依赖什么输入，以及某个性能现象应该归因到网络、解析、脚本、渲染还是缓存。回答时把链路和边界讲清楚，比机械罗列步骤更有说服力。
 
 ---
 
