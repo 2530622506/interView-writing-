@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>React Fiber 面试题清单</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: centered reading column, sticky layer index + sticky brand bar, question cards with company tags and nested follow-ups */
+:root{
+  --bg:#F2F4F5; --surface:#FCFEFF; --surface-2:#EDF0F2; --ink:#1A1D21; --muted:#5A6066;
+  --line:#DDE1E4; --accent:#0D7377; --accent-soft:#E3F0EF; --code-bg:#E8EBED;
+  --freq-high:#B42318; --freq-mid:#B5781A; --freq-top:#5937C9;
+  --shadow:0 1px 2px rgba(20,24,28,.05), 0 6px 18px rgba(20,24,28,.06);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#131518; --surface:#1C1F23; --surface-2:#23272C; --ink:#E4E6EA; --muted:#8B9197;
+    --line:#2A2E33; --accent:#4FD1C5; --accent-soft:#1B3736; --code-bg:#23272C;
+    --freq-high:#FF6B6B; --freq-mid:#E8B339; --freq-top:#B39FFF;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#131518; --surface:#1C1F23; --surface-2:#23272C; --ink:#E4E6EA; --muted:#8B9197;
+  --line:#2A2E33; --accent:#4FD1C5; --accent-soft:#1B3736; --code-bg:#23272C;
+  --freq-high:#FF6B6B; --freq-mid:#E8B339; --freq-top:#B39FFF;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.35);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth; scroll-padding-top:148px}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,system-ui,sans-serif;
+  font-size:16px; line-height:1.65;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  -webkit-font-smoothing:antialiased;
+}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--bg)}
+.bar{
+  position:sticky; top:env(safe-area-inset-top,0px); z-index:20;
+  background:color-mix(in srgb,var(--bg) 88%, transparent);
+  backdrop-filter:saturate(140%) blur(10px);
+  border-bottom:1px solid var(--line);
+  display:flex; align-items:center; gap:14px;
+  padding:14px max(16px,env(safe-area-inset-left,0px)) 14px max(16px,env(safe-area-inset-right,0px));
+  margin-left:calc(-1 * max(16px,env(safe-area-inset-left,0px)));
+  margin-right:calc(-1 * max(16px,env(safe-area-inset-right,0px)));
+}
+.brand{display:flex;align-items:center;gap:11px;margin-right:auto}
+.brand .mark{width:30px;height:30px;border-radius:9px;background:var(--accent);display:grid;place-items:center;color:#fff;font-family:"IBM Plex Mono";font-weight:600;font-size:15px;flex:none}
+.brand .t{font-family:"Fraunces",serif;font-weight:600;font-size:18px;letter-spacing:-.01em;line-height:1.1}
+.brand .s{font-family:"IBM Plex Mono";font-size:11px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;margin-top:2px}
+.toggle{
+  border:1px solid var(--line); background:var(--surface); color:var(--ink);
+  border-radius:999px; padding:7px 14px; font-family:"IBM Plex Mono"; font-size:12px;
+  cursor:pointer; display:flex; align-items:center; gap:7px; flex:none;
+}
+.toggle:hover{border-color:var(--accent)}
+.toggle .d{width:9px;height:9px;border-radius:50%;background:var(--accent)}
+
+/* layer nav */
+.layers{
+  position:sticky; top:calc(env(safe-area-inset-top,0px) + 59px); z-index:15;
+  background:color-mix(in srgb,var(--bg) 92%, transparent);
+  backdrop-filter:saturate(140%) blur(10px);
+  border-bottom:1px solid var(--line);
+  display:flex; gap:6px; overflow-x:auto; padding:10px 0;
+  margin-left:calc(-1 * max(16px,env(safe-area-inset-left,0px)));
+  margin-right:calc(-1 * max(16px,env(safe-area-inset-right,0px)));
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  scrollbar-width:none;
+}
+.layers::-webkit-scrollbar{display:none}
+.layers a{
+  flex:none; text-decoration:none; color:var(--muted);
+  font-family:"IBM Plex Mono"; font-size:12px; font-weight:500;
+  border:1px solid var(--line); border-radius:999px; padding:6px 13px;
+  display:flex; align-items:center; gap:7px; white-space:nowrap;
+}
+.layers a .n{color:var(--accent);font-weight:600}
+.layers a:hover{color:var(--ink);border-color:var(--accent)}
+
+.wrap{max-width:740px;margin:0 auto;padding:0 0 80px}
+
+/* hero */
+.hero{padding:54px 0 30px;max-width:680px}
+.eyebrow{font-family:"IBM Plex Mono";font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin-bottom:18px;display:flex;align-items:center;gap:10px}
+.eyebrow::before{content:"";width:26px;height:1px;background:var(--accent)}
+.hero h1{font-family:"Fraunces",serif;font-weight:600;font-size:clamp(30px,5.5vw,46px);line-height:1.05;letter-spacing:-.02em;margin:0 0 18px;text-wrap:balance}
+.hero h1 em{font-style:italic;font-weight:400;color:var(--accent)}
+.hero p{color:var(--muted);font-size:16.5px;margin:0;max-width:58ch}
+
+/* legend */
+.legend{margin:28px 0 0;display:flex;flex-wrap:wrap;gap:10px 22px;padding:18px 20px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.legend .grp{display:flex;align-items:center;gap:9px}
+.legend .grp .lbl{font-family:"IBM Plex Mono";font-size:11px;color:var(--muted);letter-spacing:.05em;text-transform:uppercase}
+.legend .chips{display:flex;gap:6px}
+.chip{font-family:"IBM Plex Mono";font-size:11px;font-weight:500;padding:3px 9px;border-radius:6px;letter-spacing:.02em}
+.chip.h{color:var(--freq-high);background:color-mix(in srgb,var(--freq-high) 12%,transparent)}
+.chip.m{color:var(--freq-mid);background:color-mix(in srgb,var(--freq-mid) 14%,transparent)}
+.chip.t{color:var(--freq-top);background:color-mix(in srgb,var(--freq-top) 14%,transparent)}
+
+/* section */
+.section{margin-top:64px;scroll-margin-top:150px}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:8px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.sec-num{font-family:"Fraunces",serif;font-weight:500;font-size:34px;color:var(--accent);line-height:1;flex:none}
+.sec-title{font-family:"Fraunces",serif;font-weight:600;font-size:24px;letter-spacing:-.01em}
+.sec-sub{font-family:"IBM Plex Mono";font-size:12px;color:var(--muted);margin-left:auto;text-align:right;flex:none}
+
+/* question card */
+.q{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin-top:16px;box-shadow:var(--shadow);transition:border-color .15s,transform .15s}
+.q:hover{border-color:var(--accent)}
+.q-head{display:flex;align-items:flex-start;gap:13px;margin-bottom:12px}
+.q-tag{font-family:"IBM Plex Mono";font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-soft);padding:3px 8px;border-radius:6px;flex:none;margin-top:3px;letter-spacing:.02em}
+.q-title{font-family:"Fraunces",serif;font-weight:500;font-size:19.5px;line-height:1.35;letter-spacing:-.005em;margin:0}
+.q-title code{font-family:"IBM Plex Mono";font-size:.86em;background:var(--code-bg);padding:1px 6px;border-radius:5px;font-weight:500;color:var(--ink)}
+.meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px 0 0}
+.meta .chip{font-size:11px}
+.meta .src{font-family:"IBM Plex Mono";font-size:11px;color:var(--muted);background:var(--surface-2);padding:3px 9px;border-radius:6px}
+.meta .sep{color:var(--line)}
+
+/* follow-ups */
+.fu{margin:16px 0 0;padding-left:0;list-style:none;border-left:2px solid var(--accent-soft);padding-left:16px}
+.fu li{position:relative;padding:7px 0 7px 4px;color:var(--muted);font-size:14.5px;line-height:1.55}
+.fu li::before{content:"→";position:absolute;left:-18px;color:var(--accent);font-family:"IBM Plex Mono";font-size:13px;font-weight:600}
+.fu li strong{color:var(--ink);font-weight:500}
+.fu li code{font-family:"IBM Plex Mono";font-size:.9em;background:var(--code-bg);padding:1px 5px;border-radius:4px;color:var(--ink)}
+.fu-label{font-family:"IBM Plex Mono";font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:0 0 6px;display:block}
+
+.foot{margin-top:72px;padding-top:24px;border-top:1px solid var(--line);color:var(--muted);font-size:13px;font-family:"IBM Plex Mono";line-height:1.7}
+.foot strong{color:var(--ink);font-weight:600}
+
+@media(max-width:480px){
+  .hero{padding:38px 0 22px}
+  .sec-head{flex-wrap:wrap}
+  .sec-sub{margin-left:0;width:100%;text-align:left}
+  .q{padding:18px 17px}
+  .q-title{font-size:17.5px}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="brand">
+    <div class="mark">ƒ</div>
+    <div>
+      <div class="t">React Fiber 面试题清单</div>
+      <div class="s">进阶 · 6 层递进 · 15 题</div>
+    </div>
+  </div>
+  <button class="toggle" id="toggle" aria-label="切换主题"><span class="d"></span><span id="tlabel">浅色</span></button>
+</div>
+
+<nav class="layers" aria-label="层级导航">
+  <a href="#l1"><span class="n">01</span>基础认知</a>
+  <a href="#l2"><span class="n">02</span>数据结构</a>
+  <a href="#l3"><span class="n">03</span>工作流程</a>
+  <a href="#l4"><span class="n">04</span>调度机制</a>
+  <a href="#l5"><span class="n">05</span>并发特性</a>
+  <a href="#l6"><span class="n">06</span>实战性能</a>
+</nav>
+
+<div class="wrap">
+
+  <header class="hero">
+    <div class="eyebrow">大厂真题整理 · 基于面试复盘</div>
+    <h1>从 <em>为什么需要 Fiber</em> 到 <em>调度与并发</em>，一条线打通 React 内核</h1>
+    <p>题目源自字节、阿里、腾讯、美团、快手等前端面试复盘，按 Fiber 知识体系由浅入深排成 6 层。大厂没覆盖但该考的（批处理、Scheduler 包）已补齐。每题配追问链路，还原面试官的真实下钻路径。</p>
+    <div class="legend">
+      <div class="grp"><span class="lbl">频率</span><div class="chips"><span class="chip h">高频</span><span class="chip m">中频</span><span class="chip t">拔高</span></div></div>
+      <div class="grp"><span class="lbl">说明</span><span style="font-size:13px;color:var(--muted)">高频＝几乎必问　中频＝区分度题　拔高＝少数公司</span></div>
+    </div>
+  </header>
+
+  <!-- LAYER 1 -->
+  <section class="section" id="l1">
+    <div class="sec-head">
+      <div class="sec-num">01</div>
+      <div class="sec-title">基础认知 — 为什么要有 Fiber</div>
+      <div class="sec-sub">建立动机<br>不答清这层后面都站不住</div>
+    </div>
+
+    <div class="q">
+      <div class="q-head"><span class="q-tag">Q1</span><h3 class="q-title">为什么 React 要引入 Fiber？它到底解决了什么问题？</h3></div>
+      <div class="meta"><span class="chip h">高频</span><span class="sep">·</span><span class="src">字节 / 腾讯 / 美团</span></div>
+      <ul class="fu">
+        <span class="fu-label">追问链路</span>
+        <li>React 15 的 <strong>Stack Reconciler</strong> 有什么缺陷？</li>
+        <li>什么叫"主线程被阻塞"？会带来什么用户感知上的问题？</li>
+        <li>Fiber 是怎么让渲染可以<strong>中断和恢复</strong>的？</li>
+      </ul>
+    </div>
+
+    <div class="q">
+      <div class="q-head"><span class="q-tag">Q2</span><h3 class="q-title">Fiber 架构和之前的 Stack Reconciler，本质区别是什么？</h3></div>
+      <div class="meta"><span class="chip m">中频</span><span class="sep">·</span><span class="src">腾讯</span></div>
+      <ul class="fu">
+        <span class="fu-label">追问链路</span>
+        <li>递归调用 vs <strong>链表遍历</strong>，区别在哪？</li>
+        <li>为什么递归的调用栈一旦开始就不能中途停下？</li>
+        <li>链表结构怎么让遍历变成"可暂停 / 可恢复"的？</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- LAYER 2 -->
+  <section class="section" id="l2">
+    <div class="sec-head">
+      <div class="sec-num">02</div>
+      <div class="sec-title">数据结构 — Fiber 节点长什么样</div>
+      <div class="sec-sub">字段级细节<br>答得出才算看过源码</div>
+    </div>
+
+    <div class="q">
+      <div class="q-head"><span class="q-tag">Q3</span><h3 class="q-title">Fiber 节点是什么？它和 <code>ReactElement</code> 有什么关系？</h3></div>
+      <div class="meta"><span class="chip h">高频</span><span class="sep">·</span><span class="src">字节</span></div>
+      <ul class="fu">
+        <span class="fu-label">追问链路</span>
+        <li>Fiber 上有哪些<strong>关键字段</strong>？（<code>type</code> / <code>stateNode</code> / <code>child</code> / <code>sibling</code> / <code>return</code> / <code>flags</code>）</li>
+        <li>为什么 Fiber 用<strong>链表</strong>结构而不是树？</li>
+        <li><code>stateNode</code> 在函数组件和类组件里分别指向什么？</li>
+      </ul>
+    </div>
+
+    <div class="q">
+      <div class="q-head"><span class="q-tag">Q4</span><h3 class="q-title">Fiber 树是怎么构建和链接的？child / sibling / return 三个指针怎么协作？</h3></div>
+      <div class="meta"><span class="chip m">中频</span><span class="sep">·</span><span class="src">字节</span></div>
+      <ul class="fu">
+        <span class="fu-label">追问链路</span>
+        <li>整棵 Fiber 树的<strong>遍历顺序</strong>是什么？（深度优先）</li>
+        <li><code>sibling</code> 链表是怎么形成的？和 <code>child</code> 怎么配合？</li>
+        <li>这种"长子 + 兄弟链"的结构相比多叉树有什么好处？</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- LAYER 3 -->
+  <section class="section" id="l3">
+    <div class="sec-head">
+      <div class="sec-num">03</div>
+      <div class="sec-title">工作流程 — render / commit 与双缓冲</div>
+      <div class="sec-sub">核心流程题<br>区分候选人层次的关键</div>
+    </div>
+
+    <div class="q">
+      <div class="q-head"><span class="q-tag">Q5</span><h3 class="q-title">React 的渲染分哪两个阶段？各阶段分别做了什么事？</h3></div>
+      <div class="meta"><span class="chip h">高频</span><span class="sep">·</span><span class="src">阿里 / 字节</span></div>
+      <ul class="fu">
+        <span class="fu-label">追问链路</span>
+        <li>为什么 <strong>render 阶段可以中断</strong>，commit 阶段不行？</li>
+        <li>commit 阶段的三个子阶段（<code>before mutation</code> / <code>mutation</code> / <code>layout</code>）分别做什么？</li>
+        <li><code>useLayoutEffect</code> 和 <code>useEffect</code> 分别在哪个时机触发？从 Fiber 视角解释为什么。</li>
+      </ul>
+    </div>
+
+    <div class="q">
+      <div class="q-head"><span class="q-tag">Q6</span><h3 class="q-title">什么是双缓冲（Double Buffering）？<code>current</code> 树和 <code>workInProgress</code> 树是什么？</h3></div>
+      <div class="meta"><span class="chip h">高频</span><span class="sep">·</span><span class="src">字节 / 腾讯</span></div>
+      <ul class="fu">
+        <span class="fu-label">追问链路</span>
+        <li>为什么要维护两棵树，而不是直接改当前树？</li>
+        <li>更新完成后，两棵树是怎么<strong>切换</strong>的？</li>
+        <li><code>alternate</code> 字段是做什么用的？复用它省了什么？</li>
+      </ul>
+    </div>
+
+    <div class="q">
+      <div class="q-head"><span class="q-tag">Q7</span><h3 class="q-title">diff 算法在 Fiber 架构下是怎么工作的？</h3></div>
+      <div class="meta"><span class="chip m">中频</span><span class="sep">·</span><span class="src">阿里</span></div>
+      <ul class="fu">
+        <span class="fu-label">追问链路</span>
+        <li><code>reconcileChildFibers</code> 和 <code>createChildFibers</code> 有什么区别？（mount vs update）</li>
+        <li><code>key</code> 在 diff 中起什么作用？不加 <code>key</code> 会发生什么？</li>
+        <li>为什么<strong>跨层级移动节点</strong> React 不做优化？</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- LAYER 4 -->
+  <section class="section" id="l4">
+    <div class="sec-head">
+      <div class="sec-num">04</div>
+      <div class="sec-title">调度机制 — 时间切片与优先级</div>
+      <div class="sec-sub">真正的深水区<br>能答全的人很少</div>
+    </div>
+
+    <div class="q">
+      <div class="q-head"><span class="q-tag">Q8</span><h3 class="q-title">时间切片（Time Slicing）的原理是什么？</h3></div>
+      <div class="meta"><span class="chip h">高频</span><span class="sep">·</span><span class="src">字节</span></div>
+      <ul class="fu">
+        <span class="fu-label">追问链路</span>
+        <li>用什么 API 实现时间切片？（<code>MessageChannel</code> vs <code>requestIdleCallback</code>，为什么不用后者？）</li>
+        <li>5ms 的时间片是怎么计算出来的？</li>
+        <li>时间切片解决了卡顿，但它<strong>有没有副作用</strong>？</li>
+      </ul>
+    </div>
+
+    <div class="q">
+      <div class="q-head"><span class="q-tag">Q9</span><h3 class="q-title">Fiber 的优先级调度是怎么工作的？</h3></div>
+      <div class="meta"><span class="chip h">高频</span><span class="sep">·</span><span class="src">字节 / 腾讯</span></div>
+      <ul class="fu">
+        <span class="fu-label">追问链路</span>
+        <li><strong>Lane 模型</strong>是什么？为什么从 <code>ExpirationTime</code> 换成 Lane？</li>
+        <li>高优先级任务是怎么"插队"的？低优先级任务会被丢弃吗？</li>
+        <li>什么是<strong>饥饿问题</strong>（starvation）？React 怎么解决的？</li>
+      </ul>
+    </div>
+
+    <div class="q">
+      <div class="q-head"><span class="q-tag">Q10</span><h3 class="q-title"><code>Scheduler</code> 包的核心原理是什么？</h3></div>
+      <div class="meta"><span class="chip t">拔高</span><span class="sep">·</span><span class="src">字节（少数）</span></div>
+      <ul class="fu">
+        <span class="fu-label">追问链路</span>
+        <li>任务队列是怎么<strong>排序</strong>的？（小顶堆，按过期时间）</li>
+        <li>怎么判断一个时间片已经用完了？</li>
+        <li>任务过期了 React 怎么处理？</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- LAYER 5 -->
+  <section class="section" id="l5">
+    <div class="sec-head">
+      <div class="sec-num">05</div>
+      <div class="sec-title">并发特性 — Concurrent Mode 全家桶</div>
+      <div class="sec-sub">React 18 新能力<br>和 Fiber 的关系</div>
+    </div>
+
+    <div class="q">
+      <div class="q-head"><span class="q-tag">Q11</span><h3 class="q-title">Concurrent Mode 带来了哪些新能力？它和 Fiber 是什么关系？</h3></div>
+      <div class="meta"><span class="chip m">中频</span><span class="sep">·</span><span class="src">快手 / 字节</span></div>
+      <ul class="fu">
+        <span class="fu-label">追问链路</span>
+        <li><code>useTransition</code> 的使用场景是什么？它怎么标记低优先级更新？</li>
+        <li><code>useDeferredValue</code> 和 <code>useTransition</code> 有什么区别？</li>
+        <li><code>startTransition</code> 和 <code>flushSync</code> 分别用在什么场景？</li>
+      </ul>
+    </div>
+
+    <div class="q">
+      <div class="q-head"><span class="q-tag">Q12</span><h3 class="q-title">Suspense 的工作原理是什么？Fiber 是怎么配合 Suspense 实现"等待"的？</h3></div>
+      <div class="meta"><span class="chip m">中频</span><span class="sep">·</span><span class="src">快手</span></div>
+      <ul class="fu">
+        <span class="fu-label">追问链路</span>
+        <li>组件 <code>throw</code> 一个 Promise 之后，React 是怎么处理的？</li>
+        <li>Suspense 边界（boundary）是怎么往上报错的？</li>
+        <li>React 18 的 <code>use()</code> Hook 和 Suspense 是什么关系？</li>
+      </ul>
+    </div>
+
+    <div class="q">
+      <div class="q-head"><span class="q-tag">Q13</span><h3 class="q-title">批处理（Batching）的原理是什么？React 18 的自动批处理是什么？<span style="color:var(--accent);font-family:'IBM Plex Mono';font-size:11px;font-weight:600">［补充］</span></h3></div>
+      <div class="meta"><span class="chip m">中频</span><span class="sep">·</span><span class="src">大厂少问但该懂</span></div>
+      <ul class="fu">
+        <span class="fu-label">追问链路</span>
+        <li>React 17 和 React 18 的批处理有什么区别？（事件内 vs 异步内）</li>
+        <li><code>flushSync</code> 怎么强制一次同步刷新？什么时候需要它？</li>
+        <li>自动批处理和 <strong>Lane 优先级</strong> 是怎么联动的？</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- LAYER 6 -->
+  <section class="section" id="l6">
+    <div class="sec-head">
+      <div class="sec-num">06</div>
+      <div class="sec-title">实战性能 — 排查与边界</div>
+      <div class="sec-sub">落到真实场景<br>体现工程判断力</div>
+    </div>
+
+    <div class="q">
+      <div class="q-head"><span class="q-tag">Q14</span><h3 class="q-title">一个页面掉帧卡顿，你怀疑是 React 渲染问题，怎么排查？</h3></div>
+      <div class="meta"><span class="chip h">高频</span><span class="sep">·</span><span class="src">美团</span></div>
+      <ul class="fu">
+        <span class="fu-label">追问链路</span>
+        <li>React DevTools 的 <strong>Profiler</strong> 怎么用？火焰图里哪些指标重要？</li>
+        <li>什么情况下加 <code>memo</code> / <code>useMemo</code> / <code>useCallback</code> 有效，什么情况下反而有害？</li>
+        <li>哪些场景是 Fiber 调度<strong>解决不了的</strong>，必须靠业务层优化？（虚拟列表、Web Worker）</li>
+      </ul>
+    </div>
+
+    <div class="q">
+      <div class="q-head"><span class="q-tag">Q15</span><h3 class="q-title">Fiber 解决了什么，又解决不了什么？</h3></div>
+      <div class="meta"><span class="chip m">中频</span><span class="sep">·</span><span class="src">美团</span></div>
+      <ul class="fu">
+        <span class="fu-label">追问链路</span>
+        <li>大列表渲染还是卡，Fiber 帮不上忙，怎么办？</li>
+        <li>一段同步阻塞计算（比如大数据处理）卡住主线程，怎么处理？</li>
+        <li>什么交互场景该用 <code>startTransition</code> 优化？什么场景不该用？</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="foot">
+    <strong>复习路径建议</strong>　先把 01–03 三层吃透（动机 + 数据结构 + 两阶段），这是所有公司都问的基础盘；04 层 Lane / Scheduler 是拉分项，能答全的人少；05–06 层结合 React 18 新特性和实战，体现你真的用过而不是背八股。<br><br>
+    题目来源基于字节、阿里、腾讯、美团、快手等前端面试复盘帖整理，频率标注为定性归纳，非精确统计。
+  </div>
+
+</div>
+
+<script>
+(function(){
+  var t=document.documentElement, b=document.getElementById('toggle'), l=document.getElementById('tlabel');
+  function set(v){ if(v==='dark'){t.setAttribute('data-theme','dark');l.textContent='深色';}else if(v==='light'){t.setAttribute('data-theme','light');l.textContent='浅色';}else{t.removeAttribute('data-theme');l.textContent='跟随系统';} try{localStorage.setItem('rf-theme',v||'sys');}catch(e){} }
+  var saved; try{saved=localStorage.getItem('rf-theme');}catch(e){}
+  set(saved||'sys');
+  b.addEventListener('click',function(){
+    var cur=t.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+    set(cur==='dark'?'light':'dark');
+  });
+})();
+</script>
+</body>
+</html>
